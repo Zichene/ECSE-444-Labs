@@ -1,0 +1,16 @@
+16:25:06 **** Build of configuration Debug for project Lab 0 ****
+make -j8 all 
+arm-none-eabi-gcc -o "Lab 0.elf" @"objects.list"   -mcpu=cortex-m4 -T"C:\Users\agree\OneDrive\Desktop\Assignments\Semester 5 (F2023)\ECSE 444\workspace_stm32cubeIDE\Lab 0\STM32L4S5VITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Lab 0.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: Lab 0.elf
+ 
+arm-none-eabi-size   Lab\ 0.elf 
+arm-none-eabi-objdump -h -S  Lab\ 0.elf  > "Lab 0.list"
+   text	   data	    bss	    dec	    hex	filename
+   9440	     20	   1644	  11104	   2b60	Lab 0.elf
+Finished building: default.size.stdout
+ 
+Finished building: Lab 0.list
+ 
+
+16:25:07 Build Finished. 0 errors, 0 warnings. (took 923ms)
+
