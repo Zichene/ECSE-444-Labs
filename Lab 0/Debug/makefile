@@ -60,8 +60,8 @@ all: main-build
 main-build: Lab\ 0.elf secondary-outputs
 
 # Tool invocations
-Lab\ 0.elf Lab\ 0.map: $(OBJS) $(USER_OBJS) C:\Users\Administrator\OneDrive\Desktop\Assignments\Semester\ 5\ (F2023)\ECSE\ 444\workspace_stm32cubeIDE\Lab\ 0\STM32L4S5VITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "Lab 0.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\Administrator\OneDrive\Desktop\Assignments\Semester 5 (F2023)\ECSE 444\workspace_stm32cubeIDE\Lab 0\STM32L4S5VITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Lab 0.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Lab\ 0.elf Lab\ 0.map: $(OBJS) $(USER_OBJS) C:\Users\agree\OneDrive\Desktop\Assignments\Semester\ 5\ (F2023)\ECSE\ 444\workspace_stm32cubeIDE\Lab\ 0\STM32L4S5VITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "Lab 0.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\agree\OneDrive\Desktop\Assignments\Semester 5 (F2023)\ECSE 444\workspace_stm32cubeIDE\Lab 0\STM32L4S5VITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Lab 0.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

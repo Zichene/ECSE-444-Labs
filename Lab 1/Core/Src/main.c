@@ -94,6 +94,9 @@ int main(void)
   // the max is 88.49 at index 5
   float array[10] = {48.21, 79.48, 24.27, 28.82, 78.24, 88.49, 31.19, 5.52, 82.70, 77.73};
 
+  // square root variables
+  const float32_t num = 100;
+  float32_t result = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -103,7 +106,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
+// C_max
 	  // C implementation
 	  ITM_Port32(31) = 1;
 	  for (uint32_t i=0; i<1000; i++)
@@ -121,6 +124,23 @@ int main(void)
 	  for (uint32_t i=0; i<1000; i++)
 		  arm_max_f32(&array, 10, &max, &maxIndex);
 	  ITM_Port32(31) = 6;
+
+// Sqrt
+	  // CMSIS-DSP implementation
+
+	  ITM_Port32(31) = 7;
+	  for (uint32_t i=0; i<1000; i++)
+		  arm_sqrt_f32(num, &result);
+	  ITM_Port32(31) = 8;
+
+	  // C implementation
+
+	  ITM_Port32(31) = 9;
+	  for (uint32_t i=0; i<1000; i++)
+		  c_sqrt(num, &result);
+	  ITM_Port32(31) = 10;
+
+
   }
   /* USER CODE END 3 */
 }
