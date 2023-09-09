@@ -1,0 +1,52 @@
+11:26:18 **** Incremental Build of configuration Debug for project Lab 1 ****
+make -j12 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m4 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32L4S5xx -c -I../Core/Inc -I../Drivers/STM32L4xx_HAL_Driver/Inc -I../Drivers/STM32L4xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32L4xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -o "Core/Src/main.o"
+../Core/Src/main.c: In function 'main':
+../Core/Src/main.c:113:24: warning: passing argument 1 of 'cMax' from incompatible pointer type [-Wincompatible-pointer-types]
+  113 |                   cMax(&array, 10, &max, &maxIndex);
+      |                        ^~~~~~
+      |                        |
+      |                        float (*)[10]
+In file included from ../Core/Src/main.c:26:
+../Core/Inc/lab1math.h:16:18: note: expected 'float *' but argument is of type 'float (*)[10]'
+   16 | void cMax(float *array, uint32_t size, float *max, uint32_t *maxIndex);
+      |           ~~~~~~~^~~~~
+../Core/Src/main.c:119:26: warning: passing argument 1 of 'asmMax' from incompatible pointer type [-Wincompatible-pointer-types]
+  119 |                   asmMax(&array, 10, &max, &maxIndex);
+      |                          ^~~~~~
+      |                          |
+      |                          float (*)[10]
+In file included from ../Core/Src/main.c:26:
+../Core/Inc/lab1math.h:21:27: note: expected 'float *' but argument is of type 'float (*)[10]'
+   21 | extern void asmMax(float *array, uint32_t size, float *max, uint32_t *maxIndex);
+      |                    ~~~~~~~^~~~~
+../Core/Src/main.c:125:31: warning: passing argument 1 of 'arm_max_f32' from incompatible pointer type [-Wincompatible-pointer-types]
+  125 |                   arm_max_f32(&array, 10, &max, &maxIndex);
+      |                               ^~~~~~
+      |                               |
+      |                               float (*)[10]
+In file included from ../Core/Src/main.c:25:
+../Core/Inc/arm_math.h:6675:21: note: expected 'const float32_t *' {aka 'const float *'} but argument is of type 'float (*)[10]'
+ 6675 |   const float32_t * pSrc,
+      |   ~~~~~~~~~~~~~~~~~~^~~~
+../Core/Src/main.c:98:19: warning: unused variable 'num' [-Wunused-variable]
+   98 |   const float32_t num = 100;
+      |                   ^~~
+arm-none-eabi-gcc -o "Lab 1.elf" @"objects.list"  -larm_cortexM4lf_math -mcpu=cortex-m4 -T"C:\Users\Administrator\OneDrive\Desktop\Assignments\Semester 5 (F2023)\ECSE 444\workspace_stm32cubeIDE\Lab 1\STM32L4S5VITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Lab 1.map" -Wl,--gc-sections -static -L../Core/Lib --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: Lab 1.elf
+ 
+arm-none-eabi-size   Lab\ 1.elf 
+arm-none-eabi-objdump -h -S  Lab\ 1.elf  > "Lab 1.list"
+   text	   data	    bss	    dec	    hex	filename
+   6524	     20	   1572	   8116	   1fb4	Lab 1.elf
+Finished building: default.size.stdout
+ 
+Finished building: Lab 1.list
+ 
+11:26:28 **** Incremental Build of configuration Debug for project Lab 1 ****
+make -j12 all 
+arm-none-eabi-size   Lab\ 1.elf 
+   text	   data	    bss	    dec	    hex	filename
+   6524	     20	   1572	   8116	   1fb4	Lab 1.elf
+Finished building: default.size.stdout
+ 
