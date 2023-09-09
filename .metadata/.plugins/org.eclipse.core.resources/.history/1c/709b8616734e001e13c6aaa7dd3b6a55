@@ -1,0 +1,11 @@
+/*
+ * c_trans.c
+ *
+ *  Created on: Sep 8, 2023
+ *      Author: Administrator
+ */
+#include "main.h"
+
+void c_trans(const float32_t omega, const float32_t phi, float32_t *pOut) {
+
+}

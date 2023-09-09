@@ -20,6 +20,8 @@ void cMax(float *array, uint32_t size, float *max, uint32_t *maxIndex);
  */
 extern void asmMax(float *array, uint32_t size, float *max, uint32_t *maxIndex);
 
+extern void asmSqrt(float32_t in, float32_t *pOut);
+
 /**
  * Finds the square root of a number using the Newton-Raphson method
  */

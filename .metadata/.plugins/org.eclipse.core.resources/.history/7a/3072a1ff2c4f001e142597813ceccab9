@@ -1,0 +1,13 @@
+/*
+ * test.c
+ *
+ *  Created on: Sep 9, 2023
+ *      Author: Administrator
+ */
+
+int test(int a, int b);
+
+
+int test(int a, int b) {
+	return a+b;
+}

@@ -95,7 +95,7 @@ int main(void)
   float array[10] = {48.21, 79.48, 24.27, 28.82, 78.24, 88.49, 31.19, 5.52, 82.70, 77.73};
 
   // square root variables
-  const float32_t num = 100;
+  const float32_t num = -100;
   float32_t result = 0;
   /* USER CODE END 2 */
 
@@ -139,6 +139,12 @@ int main(void)
 	  for (uint32_t i=0; i<1000; i++)
 		  c_sqrt(num, &result);
 	  ITM_Port32(31) = 10;
+
+	  // ARM implementation
+	  ITM_Port32(31) = 11;
+	  for (uint32_t i=0; i<1000; i++)
+		  asmSqrt(num, &result);
+	  ITM_Port32(31) = 12;
 
 
   }

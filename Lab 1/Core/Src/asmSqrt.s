@@ -14,17 +14,19 @@
 .section .text.rodata
 
 /**
- * void asmDiv(*input, *output);
+ * void asmSqrt(input, *output);
  *
- * S0 = pointer to input
- * R0 = output
+ * S0 = input float
+ * R0 = pointer to output
+ * if input is negative, will return the input itself
  */
 
  asmSqrt:
  	VMOV 		S1, #1
- 	VNEG.F32	S1, S1
+ 	VSUB.F32	S1, S1
  	VCMP.F32	S0, S1
- 	BLE			done
+ 	FMSTAT // copies FPSCR flags into CPSR so that we can use BLT
+ 	BLT			done
  	VSQRT.F32 	S0, S0
 
  done:

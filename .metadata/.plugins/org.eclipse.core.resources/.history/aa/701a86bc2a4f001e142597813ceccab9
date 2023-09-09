@@ -1,0 +1,17 @@
+/*
+ * test.s
+ *
+ *  Created on: Sep 9, 2023
+ *      Author: Administrator
+ */
+
+ .syntax unified
+
+ .extern c_sqrt
+
+ // .section marks a new section in assembly. .text identifies it as source code;
+// .rodata marks it as read-only, setting it to go in FLASH, not SRAM
+.section .text.rodata
+
+bl c_sqrt
+b .
