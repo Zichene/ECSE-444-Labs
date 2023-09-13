@@ -1,17 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <section name="Workbench">
 	<section name="org.eclipse.ui.texteditor.FindReplaceDialog">
-		<item key="selection" value="arm_sin"/>
+		<item key="selection" value="HAL_I2C_MODULE"/>
 		<item key="wrap" value="true"/>
 		<item key="casesensitive" value="false"/>
 		<item key="wholeword" value="false"/>
 		<item key="incremental" value="false"/>
 		<item key="isRegEx" value="false"/>
 		<list key="findhistory">
-			<item value="arm_sin"/>
-			<item value="HAL_TIM_Period"/>
-			<item value="HAL_"/>
-			<item value="GPIO_init"/>
+			<item value="HAL_I2C_MODULE"/>
 		</list>
 		<list key="replacehistory">
 		</list>

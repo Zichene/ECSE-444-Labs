@@ -6,6 +6,7 @@
 # Add inputs and outputs from these tool invocations to the build variables 
 S_SRCS += \
 ../Core/Src/asmSqrt.s \
+../Core/Src/asmTranscendental.s \
 ../Core/Src/asmmax.s \
 ../Core/Src/test.s 
 
@@ -22,6 +23,7 @@ C_SRCS += \
 
 OBJS += \
 ./Core/Src/asmSqrt.o \
+./Core/Src/asmTranscendental.o \
 ./Core/Src/asmmax.o \
 ./Core/Src/c_sqrt.o \
 ./Core/Src/c_trans.o \
@@ -36,6 +38,7 @@ OBJS += \
 
 S_DEPS += \
 ./Core/Src/asmSqrt.d \
+./Core/Src/asmTranscendental.d \
 ./Core/Src/asmmax.d \
 ./Core/Src/test.d 
 
@@ -60,7 +63,7 @@ Core/Src/%.o Core/Src/%.su Core/Src/%.cyclo: ../Core/Src/%.c Core/Src/subdir.mk
 clean: clean-Core-2f-Src
 
 clean-Core-2f-Src:
-	-$(RM) ./Core/Src/asmSqrt.d ./Core/Src/asmSqrt.o ./Core/Src/asmmax.d ./Core/Src/asmmax.o ./Core/Src/c_sqrt.cyclo ./Core/Src/c_sqrt.d ./Core/Src/c_sqrt.o ./Core/Src/c_sqrt.su ./Core/Src/c_trans.cyclo ./Core/Src/c_trans.d ./Core/Src/c_trans.o ./Core/Src/c_trans.su ./Core/Src/cmax.cyclo ./Core/Src/cmax.d ./Core/Src/cmax.o ./Core/Src/cmax.su ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/stm32l4xx_hal_msp.cyclo ./Core/Src/stm32l4xx_hal_msp.d ./Core/Src/stm32l4xx_hal_msp.o ./Core/Src/stm32l4xx_hal_msp.su ./Core/Src/stm32l4xx_it.cyclo ./Core/Src/stm32l4xx_it.d ./Core/Src/stm32l4xx_it.o ./Core/Src/stm32l4xx_it.su ./Core/Src/syscalls.cyclo ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32l4xx.cyclo ./Core/Src/system_stm32l4xx.d ./Core/Src/system_stm32l4xx.o ./Core/Src/system_stm32l4xx.su ./Core/Src/test.d ./Core/Src/test.o
+	-$(RM) ./Core/Src/asmSqrt.d ./Core/Src/asmSqrt.o ./Core/Src/asmTranscendental.d ./Core/Src/asmTranscendental.o ./Core/Src/asmmax.d ./Core/Src/asmmax.o ./Core/Src/c_sqrt.cyclo ./Core/Src/c_sqrt.d ./Core/Src/c_sqrt.o ./Core/Src/c_sqrt.su ./Core/Src/c_trans.cyclo ./Core/Src/c_trans.d ./Core/Src/c_trans.o ./Core/Src/c_trans.su ./Core/Src/cmax.cyclo ./Core/Src/cmax.d ./Core/Src/cmax.o ./Core/Src/cmax.su ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/stm32l4xx_hal_msp.cyclo ./Core/Src/stm32l4xx_hal_msp.d ./Core/Src/stm32l4xx_hal_msp.o ./Core/Src/stm32l4xx_hal_msp.su ./Core/Src/stm32l4xx_it.cyclo ./Core/Src/stm32l4xx_it.d ./Core/Src/stm32l4xx_it.o ./Core/Src/stm32l4xx_it.su ./Core/Src/syscalls.cyclo ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32l4xx.cyclo ./Core/Src/system_stm32l4xx.d ./Core/Src/system_stm32l4xx.o ./Core/Src/system_stm32l4xx.su ./Core/Src/test.d ./Core/Src/test.o
 
 .PHONY: clean-Core-2f-Src
 

@@ -97,6 +97,11 @@ int main(void)
   // square root variables
   const float32_t num = -100;
   float32_t result = 0;
+
+  // transcendental variables
+  const float32_t omega = 1;
+  const float32_t phi = 1;
+  float32_t result_trans;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -108,6 +113,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
 // C_max
 	  // C implementation
+	  /*
 	  ITM_Port32(31) = 1;
 	  for (uint32_t i=0; i<1000; i++)
 		  cMax(&array, 10, &max, &maxIndex);
@@ -124,17 +130,17 @@ int main(void)
 	  for (uint32_t i=0; i<1000; i++)
 		  arm_max_f32(&array, 10, &max, &maxIndex);
 	  ITM_Port32(31) = 6;
+*/
 
 // Sqrt
-	  // CMSIS-DSP implementation
 
+	  // CMSIS-DSP implementation
 	  ITM_Port32(31) = 7;
 	  for (uint32_t i=0; i<1000; i++)
 		  arm_sqrt_f32(num, &result);
 	  ITM_Port32(31) = 8;
 
 	  // C implementation
-
 	  ITM_Port32(31) = 9;
 	  for (uint32_t i=0; i<1000; i++)
 		  c_sqrt(num, &result);
@@ -145,6 +151,12 @@ int main(void)
 	  for (uint32_t i=0; i<1000; i++)
 		  asmSqrt(num, &result);
 	  ITM_Port32(31) = 12;
+
+// Transcendental
+
+	  // ARM implementation
+	  asmTranscendental(1, 2, &result_trans);
+	  c_trans(1, 2, &result_trans);
 
 
   }

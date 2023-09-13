@@ -1,4 +1,5 @@
 "./Core/Src/asmSqrt.o"
+"./Core/Src/asmTranscendental.o"
 "./Core/Src/asmmax.o"
 "./Core/Src/c_sqrt.o"
 "./Core/Src/c_trans.o"
