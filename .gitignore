@@ -1,0 +1,5 @@
+# .metadata files
+.metadata/
+
+# log files
+*.log
