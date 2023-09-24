@@ -3,3 +3,15 @@
 
 # log files
 *.log
+
+# setting files
+.settings/
+
+#ld files
+*.ld
+
+#project files
+*.project
+*.cproject
+*.mxproject
+
