@@ -1,11 +1,14 @@
 # .metadata files
-.metadata/
+**/.metadata/
 
 # log files
 *.log
 
 # setting files
-.settings/
+**/.settings/
+
+# debug files
+**/Debug/
 
 #ld files
 *.ld
