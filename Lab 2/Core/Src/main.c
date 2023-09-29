@@ -56,11 +56,38 @@ static void MX_DAC1_Init(void);
 static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
 void delay_forloop(int n);
+int16_t get_temp_c();
+float32_t get_vref();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+// setup ADC
+ADC_ChannelConfTypeDef channel_config_vref = {
+	  	  .Channel = ADC_CHANNEL_VREFINT,
+		  .Rank = ADC_REGULAR_RANK_1,
+		  .SamplingTime = ADC_SAMPLETIME_640CYCLES_5,
+		  .SingleDiff = ADC_SINGLE_ENDED,
+		  .OffsetNumber = ADC_OFFSET_NONE,
+		  .Offset = 0
+};
 
+ADC_ChannelConfTypeDef channel_config_temp = {
+	  	  .Channel = ADC_CHANNEL_TEMPSENSOR,
+		  .Rank = ADC_REGULAR_RANK_1,
+		  .SamplingTime = ADC_SAMPLETIME_640CYCLES_5,
+		  .SingleDiff = ADC_SINGLE_ENDED,
+		  .OffsetNumber = ADC_OFFSET_NONE,
+		  .Offset = 0
+};
+
+// get TS_CAL1 and TS_CAL2 from memory addresses
+const int *p_TS_CAL1 = (int *)0x1FFF75A8;
+const int16_t TS_CAL1_TEMP = 30;
+const int *p_TS_CAL2 = (int *)0x1FFF75CA;
+const int16_t TS_CAL2_TEMP = 110;
+// get vrefint
+const int *p_VREFINT = (int *) 0x1FFF75AA;
 /* USER CODE END 0 */
 
 /**
@@ -93,62 +120,13 @@ int main(void)
   MX_DAC1_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
-  // setup ADC
-  ADC_ChannelConfTypeDef channel_config_vref = {
-  	  	  .Channel = ADC_CHANNEL_VREFINT,
-		  .Rank = ADC_REGULAR_RANK_1,
-		  .SamplingTime = ADC_SAMPLETIME_640CYCLES_5,
-		  .SingleDiff = ADC_SINGLE_ENDED,
-		  .OffsetNumber = ADC_OFFSET_NONE,
-		  .Offset = 0
-  };
-
-  ADC_ChannelConfTypeDef channel_config_temp = {
-  	  	  .Channel = ADC_CHANNEL_TEMPSENSOR,
-		  .Rank = ADC_REGULAR_RANK_1,
-		  .SamplingTime = ADC_SAMPLETIME_640CYCLES_5,
-		  .SingleDiff = ADC_SINGLE_ENDED,
-		  .OffsetNumber = ADC_OFFSET_NONE,
-		  .Offset = 0
-  };
-
-
-  if (HAL_ADC_ConfigChannel (&hadc1, &channel_config_vref) != HAL_OK){
-       return -1;
-   }
-
-  int *p_TS_CAL1 = (int *)0x1FFF75A8;
-  int16_t TS_CAL1 = *p_TS_CAL1;
-  int16_t TS_CAL1_TEMP = 30;
-
-  int *p_TS_CAL2 = (int *)0x1FFF75CA;
-  int16_t TS_CAL2 = *p_TS_CAL2;
-  int16_t TS_CAL2_TEMP = 110;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
-	  HAL_ADC_Start(&hadc1);
-	  HAL_ADC_PollForConversion(&hadc1, 199); // 199 is timeout in ms
-	  uint32_t vref = HAL_ADC_GetValue(&hadc1);
-	  HAL_ADC_Stop(&hadc1);
-
-	  if (HAL_ADC_ConfigChannel (&hadc1, &channel_config_temp) != HAL_OK){
-	        return -1;
-	    }
-
-	  // temperature
-	  HAL_ADC_Start(&hadc1);
-	  HAL_ADC_PollForConversion(&hadc1, 199); // 199 is timeout in ms
-	  int16_t TS_DATA = HAL_ADC_GetValue(&hadc1);
-	  TS_DATA = TS_DATA*11/10;
-	  HAL_ADC_Stop(&hadc1);
-
-	  int16_t temp = (TS_CAL2_TEMP - TS_CAL1_TEMP)*(TS_DATA-TS_CAL1)/(TS_CAL2 - TS_CAL1) + 30;
-
+	  int16_t temp = get_temp_c();
 	  GPIO_PinState pinState = HAL_GPIO_ReadPin(PB_BLUE_GPIO_Port, PB_BLUE_Pin);
 	  if (pinState == GPIO_PIN_RESET) {
 		  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
@@ -163,13 +141,13 @@ int main(void)
 	 uint8_t saw = 0;
 	 uint8_t sine = 0;
 	 // saw wave + triangle wave
-	 while(1) {
+
 		 for (int i = 0; i <= 7; i++) {
 			 saw = 16*i;
 			 triangle = 32*i;
 			 sine = 128*arm_sin_f32((pi*i) / 7) + 128;
 			 HAL_Delay(1);
-			 HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, sine);
+			 HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, triangle);
 			 HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_8B_R, triangle);
 		 }
 		 for (int i = 1; i <= 7; i++) {
@@ -177,10 +155,10 @@ int main(void)
 			 triangle = 32*(7-i);
 			 sine = 128*arm_sin_f32(pi+((pi*i) / 7)) + 128;
 			 HAL_Delay(1);
-			 HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, sine);
+			 HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, triangle);
 			 HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_8B_R, triangle);
 		 }
-	 }
+
 
     /* USER CODE END WHILE */
 
@@ -400,6 +378,39 @@ void delay_forloop(int n) {
 	for (int i = 0; i <= n; i++) {
 	}
 	return;
+}
+
+// Function that returns the temperature reading in celcius
+int16_t get_temp_c() {
+	const int16_t TS_CAL1 = *p_TS_CAL1;
+	const int16_t TS_CAL2 = *p_TS_CAL2;
+	// config ADC
+	  if (HAL_ADC_ConfigChannel (&hadc1, &channel_config_temp) != HAL_OK){
+	        return -1;
+	    }
+
+	  // get temperature
+	  HAL_ADC_Start(&hadc1);
+	  HAL_ADC_PollForConversion(&hadc1, 1000); // number = timeout in ms
+	  int16_t TS_DATA = HAL_ADC_GetValue(&hadc1);
+	  HAL_ADC_Stop(&hadc1);
+	  float32_t vref = get_vref();
+	  TS_DATA = round(TS_DATA*vref/3.0);
+
+	  return (TS_CAL2_TEMP - TS_CAL1_TEMP)*(TS_DATA-TS_CAL1)/(TS_CAL2 - TS_CAL1) + 30;
+}
+
+float32_t get_vref() {
+	const int16_t VREFINT = *p_VREFINT;
+	const int16_t VREFCHAR = 3; // device speficiations
+	  if (HAL_ADC_ConfigChannel (&hadc1, &channel_config_vref) != HAL_OK){
+	        return -1;
+	    }
+	  HAL_ADC_Start(&hadc1);
+	  HAL_ADC_PollForConversion(&hadc1, 1000); // number = timeout in ms
+	  int16_t VREFINT_DATA = HAL_ADC_GetValue(&hadc1);
+	  HAL_ADC_Stop(&hadc1);
+	  return VREFCHAR*((float32_t) VREFINT)/VREFINT_DATA;
 }
 /* USER CODE END 4 */
 
