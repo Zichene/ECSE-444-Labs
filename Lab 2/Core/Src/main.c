@@ -55,7 +55,6 @@ static void MX_GPIO_Init(void);
 static void MX_DAC1_Init(void);
 static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
-void delay_forloop(int n);
 int16_t get_temp_c();
 float32_t get_vref();
 /* USER CODE END PFP */
@@ -120,52 +119,81 @@ int main(void)
   MX_DAC1_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
+  // init variables
+  uint16_t waveForm = 0;
+  uint16_t temp;
+  int8_t iterator = 0;
+  int8_t lightState = 0;
+  int8_t waveSetting = 0;
+  const int8_t TEMP_RANGE_MAX = 50;
+  const int8_t TEMP_RANGE_MIN = 20;
+  const int8_t DELAY_RANGE_MAX = 20;
+  const int8_t DELAY_RANGE_MIN = 0;
+  float32_t TEMP_TO_DELAY_SLOPE =(float)(DELAY_RANGE_MAX - DELAY_RANGE_MIN)/(TEMP_RANGE_MAX - TEMP_RANGE_MIN);
+  float32_t TEMP_TO_DELAY_INTERCEPT = DELAY_RANGE_MIN - TEMP_TO_DELAY_SLOPE*TEMP_RANGE_MIN;
+  int8_t delay = 0;
+  // start DAC
+  HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  int16_t temp = get_temp_c();
 	  GPIO_PinState pinState = HAL_GPIO_ReadPin(PB_BLUE_GPIO_Port, PB_BLUE_Pin);
-	  if (pinState == GPIO_PIN_RESET) {
-		  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
-	  } else {
-		  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
-	  }
-	  // start DAC
-	 HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
-	 HAL_DAC_Start(&hdac1, DAC_CHANNEL_2);
-	 // init signal vars
-	 uint8_t triangle = 0;
-	 uint8_t saw = 0;
-	 uint8_t sine = 0;
-	 // saw wave + triangle wave
+	           if (pinState == GPIO_PIN_RESET) {
+	        	   if (lightState == 0) {
+						HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+						//Switches to waves via temperature
+						lightState=1;
+	        	   } else {
+		                HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+		                //Resets to fixed waves and rotates to next type
+		                lightState=0;
+		                iterator=0;
+		                waveSetting = (waveSetting+1)%3;
+	        	   }
+	        	   // loop to trap us here until PB is let go
+	        	   while (1) {
+	        		   pinState = HAL_GPIO_ReadPin(PB_BLUE_GPIO_Port, PB_BLUE_Pin);
+	        		   if (pinState == GPIO_PIN_SET)
+	        			   break;
+	        	   }
+	            }
+               //Sawtooth
+       	   	   if (waveSetting == 0){
+                   waveForm = 16*iterator;
+               }
+               //Triangle
+               else if (waveSetting == 1){
+                    if (iterator<7){
+                           waveForm = 32*iterator;
+                    } else{
+                           waveForm = 32*(14-iterator);
+                    }
+               }
+               //Sine
+               else if (waveSetting == 2){
+                   waveForm = 128*arm_sin_f32((pi*iterator) / 7) + 128;
+               }
 
-		 for (int i = 0; i <= 7; i++) {
-			 saw = 16*i;
-			 triangle = 32*i;
-			 sine = 128*arm_sin_f32((pi*i) / 7) + 128;
-			 HAL_Delay(1);
-			 HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, triangle);
-			 HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_8B_R, triangle);
-		 }
-		 for (int i = 1; i <= 7; i++) {
-			 saw = 16*(7+i);
-			 triangle = 32*(7-i);
-			 sine = 128*arm_sin_f32(pi+((pi*i) / 7)) + 128;
-			 HAL_Delay(1);
-			 HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, triangle);
-			 HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_8B_R, triangle);
-		 }
+       	   	   if (lightState == 1) {
+       	   		   temp = get_temp_c();
+	               delay = round(temp*TEMP_TO_DELAY_SLOPE + TEMP_TO_DELAY_INTERCEPT);
+       	   	   } else {
+       	   		   delay = DELAY_RANGE_MIN;
+       	   	   }
+
+	      iterator = (iterator+1)%14;
+	      HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, waveForm);
+	      HAL_Delay(delay);
 
 
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
   }
-  /* USER CODE END 3 */
+    /* USER CODE END WHILE */
 }
+    /* USER CODE BEGIN 3 */
+  /* USER CODE END 3 */
 
 /**
   * @brief System Clock Configuration
@@ -373,13 +401,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-// Empty forloop that acts as a delay
-void delay_forloop(int n) {
-	for (int i = 0; i <= n; i++) {
-	}
-	return;
-}
-
 // Function that returns the temperature reading in celcius
 int16_t get_temp_c() {
 	const int16_t TS_CAL1 = *p_TS_CAL1;
@@ -400,6 +421,7 @@ int16_t get_temp_c() {
 	  return (TS_CAL2_TEMP - TS_CAL1_TEMP)*(TS_DATA-TS_CAL1)/(TS_CAL2 - TS_CAL1) + 30;
 }
 
+// function that returns the VREF
 float32_t get_vref() {
 	const int16_t VREFINT = *p_VREFINT;
 	const int16_t VREFCHAR = 3; // device speficiations
@@ -412,6 +434,7 @@ float32_t get_vref() {
 	  HAL_ADC_Stop(&hadc1);
 	  return VREFCHAR*((float32_t) VREFINT)/VREFINT_DATA;
 }
+
 /* USER CODE END 4 */
 
 /**
