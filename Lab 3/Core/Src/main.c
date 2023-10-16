@@ -21,7 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#define ARM_MATH_CM4
+#include "arm_math.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -31,7 +32,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define pi 3.14
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -54,11 +55,17 @@ static void MX_GPIO_Init(void);
 static void MX_DAC1_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
-
+void populateSineWave8Bit(uint8_t *array);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+// init variables
+uint8_t waveCounter = 0;
+uint16_t tim2_counter = 0; // use this to vary frequency
+uint8_t sine[15];
+const uint16_t desiredFrequency = 2000; // in Hz
+
 
 /* USER CODE END 0 */
 
@@ -93,6 +100,12 @@ int main(void)
   MX_DAC1_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
+  // initiating things
+  HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
+  // start the timer (TIM2) and associated interrupt
+  HAL_TIM_Base_Start_IT(&htim2); // the _IT at the end of fn. means interrupt
+  populateSineWave8Bit(sine);
+
 
   /* USER CODE END 2 */
 
@@ -294,9 +307,33 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+/* INTERRUPT FUNCTIONS*/
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	if (GPIO_Pin == PB_BLUE_Pin) {
 		HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+	}
+}
+
+void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim) {
+	if (htim == &htim2) {
+		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, sine[waveCounter]);
+		waveCounter = (waveCounter+1)%15;
+
+	}
+}
+
+/* OTHER STUFF/ HELPER FUNCTIONS*/
+/*
+ * Populates an array with values of a sine wave for the DAC (8 bit right alligned)
+ */
+void populateSineWave8Bit(uint8_t *array) {
+	const uint8_t ARRAY_LEN = 16;
+	int val = 0;
+	for (int i = 0; i < ARRAY_LEN; i++) {
+		val = 128*arm_sin_f32((pi*i) / 8) + 128;
+		array[i] = val;
+		// debug
+		// int debug = array[i];
 	}
 }
 
