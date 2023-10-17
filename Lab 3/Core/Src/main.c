@@ -56,6 +56,7 @@ static void MX_DAC1_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 void populateSineWave8Bit(uint8_t *array);
+void changeWaveFrequency(int frequency);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -64,9 +65,10 @@ void populateSineWave8Bit(uint8_t *array);
 uint8_t waveCounter = 0;
 uint16_t tim2_counter = 0; // use this to vary frequency
 uint8_t sine[15];
-const uint16_t desiredFrequency = 2000; // in Hz
-
-
+const int sampleFrequency = 44100; // 44.1 KHz
+const int samplePeriod = 120000000/sampleFrequency; // Clock freq / sampleFrequency
+int waveFreqCountPeriod = 1;
+int waveFreqCounter = 0;
 /* USER CODE END 0 */
 
 /**
@@ -105,6 +107,7 @@ int main(void)
   // start the timer (TIM2) and associated interrupt
   HAL_TIM_Base_Start_IT(&htim2); // the _IT at the end of fn. means interrupt
   populateSineWave8Bit(sine);
+  changeWaveFrequency(2000); // 2kHz
 
 
   /* USER CODE END 2 */
@@ -242,7 +245,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 0;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 2721;
+  htim2.Init.Period = samplePeriod;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -315,11 +318,13 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 }
 
 void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim) {
-	if (htim == &htim2) {
+	if (htim == &htim2 && waveFreqCounter == waveFreqCountPeriod) {
 		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, sine[waveCounter]);
 		waveCounter = (waveCounter+1)%15;
-
+		// reset
+		waveFreqCounter = 0;
 	}
+	waveFreqCounter++;
 }
 
 /* OTHER STUFF/ HELPER FUNCTIONS*/
@@ -330,13 +335,17 @@ void populateSineWave8Bit(uint8_t *array) {
 	const uint8_t ARRAY_LEN = 16;
 	int val = 0;
 	for (int i = 0; i < ARRAY_LEN; i++) {
-		val = 128*arm_sin_f32((pi*i) / 8) + 128;
+		val = 90*arm_sin_f32((pi*i) / 8) + 90;
 		array[i] = val;
 		// debug
 		// int debug = array[i];
 	}
 }
 
+
+void changeWaveFrequency(int frequency) {
+	waveFreqCountPeriod = sampleFrequency/frequency;
+}
 
 /* USER CODE END 4 */
 
