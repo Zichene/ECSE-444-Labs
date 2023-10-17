@@ -63,12 +63,12 @@ void changeWaveFrequency(int frequency);
 /* USER CODE BEGIN 0 */
 // init variables
 uint8_t waveCounter = 0;
-uint16_t tim2_counter = 0; // use this to vary frequency
 uint8_t sine[15];
 const int sampleFrequency = 44100; // 44.1 KHz
 const int samplePeriod = 120000000/sampleFrequency; // Clock freq / sampleFrequency
 int waveFreqCountPeriod = 1;
 int waveFreqCounter = 0;
+uint8_t anotherCounter = 0;
 /* USER CODE END 0 */
 
 /**
@@ -107,7 +107,7 @@ int main(void)
   // start the timer (TIM2) and associated interrupt
   HAL_TIM_Base_Start_IT(&htim2); // the _IT at the end of fn. means interrupt
   populateSineWave8Bit(sine);
-  changeWaveFrequency(2000); // 2kHz
+  changeWaveFrequency(20000); // 2kHz
 
 
   /* USER CODE END 2 */
@@ -314,6 +314,9 @@ static void MX_GPIO_Init(void)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	if (GPIO_Pin == PB_BLUE_Pin) {
 		HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+
+		changeWaveFrequency(2000*(anotherCounter+1));
+		anotherCounter = (anotherCounter+1)%10;
 	}
 }
 
@@ -344,6 +347,7 @@ void populateSineWave8Bit(uint8_t *array) {
 
 
 void changeWaveFrequency(int frequency) {
+	waveFreqCounter = 0;
 	waveFreqCountPeriod = sampleFrequency/frequency;
 }
 
