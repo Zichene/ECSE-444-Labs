@@ -1,0 +1,13 @@
+Current Target Sampling Rate: 24 kHz
+System_clk = 120 MHz
+
+DFSDM (Microphones):
+	- Divider = 50  [parameter in Computing -> DFSDM -> Output Clock]
+	- Fors = 100 [parameter in Computing -> DFSDM -> Filter0]
+        - Working_clk = System_clk/Divider = 2.4 MHz
+	- Sampling rate = Working_clk/Fors = 24 kHz
+
+DAC (Speaker):
+	- Timer_cnt_period = 5000 [parameter in Timers -> TIM2 -> Parameter Settings]
+	- Sampling rate = System_clk/Timer_cnt_period = 24 kHz
+
