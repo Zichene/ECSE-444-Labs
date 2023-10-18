@@ -33,6 +33,8 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define pi 3.14
+#define true 1
+#define false 0
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -64,6 +66,7 @@ static void MX_DFSDM1_Init(void);
 /* USER CODE BEGIN PFP */
 void populateSineWave8Bit(uint8_t *array);
 void changeWaveFrequency(int frequency);
+void transformBufferToDAC(int32_t *buffer, uint16_t bufferLength);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -75,6 +78,12 @@ const int sampleFrequency = 44100; // 44.1 KHz
 const int samplePeriod = 120000000/sampleFrequency; // Clock freq / sampleFrequency
 int waveFreqCountPeriod = 1;
 int waveFreqCounter = 0;
+// buffer for sound samples
+const uint16_t RECORDING_BUFLEN = 40000;
+int32_t recordingBuffer[40000]; // sampling rate @ 20 kHz => 2 second of recording
+// boolean flags
+uint8_t DFSDM_finished = false;
+
 /* USER CODE END 0 */
 
 /**
@@ -110,20 +119,43 @@ int main(void)
   MX_TIM2_Init();
   MX_DFSDM1_Init();
   /* USER CODE BEGIN 2 */
+  HAL_TIM_Base_Start_IT(&htim2);
+  HAL_DFSDM_FilterRegularStart_DMA(&hdfsdm1_filter0, recordingBuffer, RECORDING_BUFLEN);
+  while (!DFSDM_finished) {
+	  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+  }
+  transformBufferToDAC(recordingBuffer, RECORDING_BUFLEN);
+  HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, recordingBuffer, RECORDING_BUFLEN, DAC_ALIGN_8B_R);
+  /* ------------- PART 2 OF LAB COMMENTED OUT BELOW ------------------
   // initiating things
   HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, sine, 15, DAC_ALIGN_8B_R);
   // start the timer (TIM2) and associated interrupt
   HAL_TIM_Base_Start_IT(&htim2); // the _IT at the end of fn. means interrupt
   populateSineWave8Bit(sine);
   changeWaveFrequency(2000); // 2kHz
-
+*/
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
+  while (true)
   {
+	  // debug
+		int32_t cur;
+		int32_t min = INT32_MAX;
+		int32_t max = INT32_MIN;
+		int32_t avg = 0;
+		for (int i = 0; i < RECORDING_BUFLEN; i++) {
+			cur = recordingBuffer[i];
+			if (cur <= min) {
+				min = cur;
+			}
+
+			if (cur >= max) {
+				max = cur;
+			}
+		}
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -411,6 +443,11 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim) {
 }
 */
 
+void HAL_DFSDM_FilterRegConvCpltCallback(DFSDM_Filter_HandleTypeDef *hdfsdm_filter) {
+	HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+	DFSDM_finished = true;
+}
+
 /* OTHER STUFF/ HELPER FUNCTIONS*/
 /*
  * Populates an array with values of a sine wave for the DAC (8 bit right alligned)
@@ -430,6 +467,41 @@ void populateSineWave8Bit(uint8_t *array) {
 void changeWaveFrequency(int frequency) {
 	waveFreqCounter = 0;
 	waveFreqCountPeriod = sampleFrequency/frequency;
+}
+
+/**
+ * Transforms a buffer's values into valid DAC 8bit right aligned values
+ */
+void transformBufferToDAC(int32_t *buffer, uint16_t buffer_length) {
+	for (int i = 0; i < buffer_length; i++) {
+		int32_t val = buffer[i]; // 24-bit value
+		val >> 8;
+		// need to map buffer values to 8bit right alligned values (uint8_t)
+		// from experimentation (screaming at the board): min values tend to be -3000 and max seems to be ~1000
+		const int16_t MAX_VAL = 1000;
+		const int16_t MIN_VAL = -3000;
+		const float a = (255.0)/(MAX_VAL - MIN_VAL); // slope
+
+		// clip buffer values to within [-MIN_VAL, MAX_VAL]
+		if (val <= MIN_VAL) {
+			val = MIN_VAL;
+		}
+		if (val >= MAX_VAL) {
+			val = MAX_VAL;
+		}
+		// scale values up by [-MIN_VAL] to make sure no negatives
+		if (MIN_VAL < 0) {
+			val += (-MIN_VAL);
+		}
+		// now the range of val should be [0, MAX_VAL-MIN_VAL], apply linear function to get DAC val
+		val = round(a*val);
+		if (val >= 0 && val <= 255) {
+			buffer[i] = val; // change the buffer
+		} else {
+			Error_Handler(); // should not happen
+		}
+
+	}
 }
 
 /* USER CODE END 4 */
