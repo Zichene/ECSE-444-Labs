@@ -42,6 +42,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 DAC_HandleTypeDef hdac1;
+DMA_HandleTypeDef hdma_dac1_ch1;
 
 TIM_HandleTypeDef htim2;
 
@@ -52,6 +53,7 @@ TIM_HandleTypeDef htim2;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_DAC1_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
@@ -68,7 +70,6 @@ const int sampleFrequency = 44100; // 44.1 KHz
 const int samplePeriod = 120000000/sampleFrequency; // Clock freq / sampleFrequency
 int waveFreqCountPeriod = 1;
 int waveFreqCounter = 0;
-uint8_t anotherCounter = 0;
 /* USER CODE END 0 */
 
 /**
@@ -99,15 +100,16 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_DAC1_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   // initiating things
-  HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
+  HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, sine, 15, DAC_ALIGN_8B_R);
   // start the timer (TIM2) and associated interrupt
   HAL_TIM_Base_Start_IT(&htim2); // the _IT at the end of fn. means interrupt
   populateSineWave8Bit(sine);
-  changeWaveFrequency(20000); // 2kHz
+  changeWaveFrequency(2000); // 2kHz
 
 
   /* USER CODE END 2 */
@@ -202,7 +204,7 @@ static void MX_DAC1_Init(void)
   /** DAC channel OUT1 config
   */
   sConfig.DAC_SampleAndHold = DAC_SAMPLEANDHOLD_DISABLE;
-  sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
+  sConfig.DAC_Trigger = DAC_TRIGGER_T2_TRGO;
   sConfig.DAC_HighFrequency = DAC_HIGH_FREQUENCY_INTERFACE_MODE_ABOVE_80MHZ;
   sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
   sConfig.DAC_ConnectOnChipPeripheral = DAC_CHIPCONNECT_DISABLE;
@@ -214,6 +216,7 @@ static void MX_DAC1_Init(void)
 
   /** DAC channel OUT2 config
   */
+  sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
   if (HAL_DAC_ConfigChannel(&hdac1, &sConfig, DAC_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
@@ -245,7 +248,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 0;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = samplePeriod;
+  htim2.Init.Period = 2721;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -266,6 +269,23 @@ static void MX_TIM2_Init(void)
   /* USER CODE BEGIN TIM2_Init 2 */
 
   /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMAMUX1_CLK_ENABLE();
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
 
 }
 
@@ -314,12 +334,9 @@ static void MX_GPIO_Init(void)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	if (GPIO_Pin == PB_BLUE_Pin) {
 		HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-
-		changeWaveFrequency(2000*(anotherCounter+1));
-		anotherCounter = (anotherCounter+1)%10;
 	}
 }
-
+/*
 void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim) {
 	if (htim == &htim2 && waveFreqCounter == waveFreqCountPeriod) {
 		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, sine[waveCounter]);
@@ -329,6 +346,7 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim) {
 	}
 	waveFreqCounter++;
 }
+*/
 
 /* OTHER STUFF/ HELPER FUNCTIONS*/
 /*
