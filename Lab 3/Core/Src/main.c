@@ -83,6 +83,10 @@ const uint16_t RECORDING_BUFLEN = 40000;
 int32_t recordingBuffer[40000]; // sampling rate @ 20 kHz => 2 second of recording
 // boolean flags
 uint8_t DFSDM_finished = false;
+uint8_t lightState = 0; //0 is off, 1 is on
+uint8_t lightBlink = 0; //0 is normal, 1 is blinking
+uint16_t blinkFreqReducerCount=0;
+uint16_t blinkFreqReducerPeriod=8000;
 
 /* USER CODE END 0 */
 
@@ -119,6 +123,11 @@ int main(void)
   MX_TIM2_Init();
   MX_DFSDM1_Init();
   /* USER CODE BEGIN 2 */
+  // initiating things
+  HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
+  // start the timer (TIM2) and associated interrupt
+  HAL_TIM_Base_Start_IT(&htim2); // the _IT at the end of fn. means interrupt
+  /* ------------- PART 3 OF LAB COMMENT OUT BELOW -------------------
   HAL_TIM_Base_Start_IT(&htim2);
   HAL_DFSDM_FilterRegularStart_DMA(&hdfsdm1_filter0, recordingBuffer, RECORDING_BUFLEN);
   while (!DFSDM_finished) {
@@ -126,6 +135,7 @@ int main(void)
   }
   transformBufferToDAC(recordingBuffer, RECORDING_BUFLEN);
   HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, recordingBuffer, RECORDING_BUFLEN, DAC_ALIGN_8B_R);
+  */
   /* ------------- PART 2 OF LAB COMMENTED OUT BELOW ------------------
   // initiating things
   HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, sine, 15, DAC_ALIGN_8B_R);
@@ -141,7 +151,30 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (true)
   {
+
+      if (lightState==1 && lightBlink==0){
+          DFSDM_finished = false;
+          lightBlink = 1;
+          HAL_DFSDM_FilterRegularStart_DMA(&hdfsdm1_filter0, recordingBuffer, RECORDING_BUFLEN);
+          while (!DFSDM_finished) {
+          }
+          HAL_DFSDM_FilterRegularStop_DMA(&hdfsdm1_filter0);
+          lightBlink = 0;
+
+        	  // make LED solid
+          HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+          lightState = 1;
+
+          transformBufferToDAC(recordingBuffer, RECORDING_BUFLEN);
+          HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, recordingBuffer, RECORDING_BUFLEN, DAC_ALIGN_8B_R);
+          while(lightState==1){
+
+          }
+          HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+          lightState = 1;
+      }
 	  // debug
+	  /*
 		int32_t cur;
 		int32_t min = INT32_MAX;
 		int32_t max = INT32_MIN;
@@ -156,6 +189,7 @@ int main(void)
 				max = cur;
 			}
 		}
+		*/
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -426,12 +460,14 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 /* INTERRUPT FUNCTIONS*/
+/* PART 1-2
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	if (GPIO_Pin == PB_BLUE_Pin) {
 		HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 	}
 }
-/*
+*/
+/* PART 1-2
 void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim) {
 	if (htim == &htim2 && waveFreqCounter == waveFreqCountPeriod) {
 		HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_8B_R, sine[waveCounter]);
@@ -443,8 +479,39 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim) {
 }
 */
 
+/**
+ * Part 3
+ */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+    if (GPIO_Pin == PB_BLUE_Pin) {
+        HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+        if (lightState==0){
+            lightState=1;
+        }else{
+            lightState=0;
+        }
+        blinkFreqReducerCount=0;
+    }
+}
+
+void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim) {
+	//Part 3
+	if(lightBlink==1 && blinkFreqReducerCount==blinkFreqReducerPeriod){
+		HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+        if (lightState==0){
+            lightState=1;
+        }else{
+            lightState=0;
+        }
+        blinkFreqReducerCount=0;
+	}
+
+	blinkFreqReducerCount++;
+
+}
+
 void HAL_DFSDM_FilterRegConvCpltCallback(DFSDM_Filter_HandleTypeDef *hdfsdm_filter) {
-	HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+	//HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
 	DFSDM_finished = true;
 }
 
