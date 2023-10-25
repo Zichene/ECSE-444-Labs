@@ -66,7 +66,7 @@ static void MX_DFSDM1_Init(void);
 /* USER CODE BEGIN PFP */
 void populateSineWave8Bit(uint8_t *array);
 void changeWaveFrequency(int frequency);
-void transformBufferToDAC(int32_t *buffer, uint16_t bufferLength);
+void transformBufferToDAC(int32_t *buffer, uint32_t recording_buffer_length, uint32_t total_buffer_length);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -79,8 +79,9 @@ const int samplePeriod = 120000000/sampleFrequency; // Clock freq / sampleFreque
 int waveFreqCountPeriod = 1;
 int waveFreqCounter = 0;
 // buffer for sound samples
-const uint16_t RECORDING_BUFLEN = 40000;
-int32_t recordingBuffer[40000]; // sampling rate @ 20 kHz => 2 second of recording
+const uint32_t RECORDING_BUFLEN = 65500; // buffer length purely for recording
+const uint32_t VOICE_BUFLEN = 40000; // buffer length recording+chime
+int32_t recordingBuffer[65500]; // sampling rate @ 20 kHz => 2 second of recording and 1 second of space for chime
 // boolean flags
 uint8_t DFSDM_finished = false;
 uint8_t lightState = 0; //0 is off, 1 is on
@@ -127,6 +128,7 @@ int main(void)
   HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
   // start the timer (TIM2) and associated interrupt
   HAL_TIM_Base_Start_IT(&htim2); // the _IT at the end of fn. means interrupt
+  populateSineWave8Bit(sine);
   /* ------------- PART 3 OF LAB COMMENT OUT BELOW -------------------
   HAL_TIM_Base_Start_IT(&htim2);
   HAL_DFSDM_FilterRegularStart_DMA(&hdfsdm1_filter0, recordingBuffer, RECORDING_BUFLEN);
@@ -155,7 +157,7 @@ int main(void)
       if (lightState==1 && lightBlink==0){
           DFSDM_finished = false;
           lightBlink = 1;
-          HAL_DFSDM_FilterRegularStart_DMA(&hdfsdm1_filter0, recordingBuffer, RECORDING_BUFLEN);
+          HAL_DFSDM_FilterRegularStart_DMA(&hdfsdm1_filter0, recordingBuffer, VOICE_BUFLEN);
           while (!DFSDM_finished) {
           }
           HAL_DFSDM_FilterRegularStop_DMA(&hdfsdm1_filter0);
@@ -165,11 +167,13 @@ int main(void)
           HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
           lightState = 1;
 
-          transformBufferToDAC(recordingBuffer, RECORDING_BUFLEN);
+          transformBufferToDAC(recordingBuffer, VOICE_BUFLEN, RECORDING_BUFLEN);
           HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, recordingBuffer, RECORDING_BUFLEN, DAC_ALIGN_8B_R);
           while(lightState==1){
 
           }
+          // stop playback on button press
+          HAL_DAC_Stop_DMA(&hdac1, DAC_CHANNEL_1);
           HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
           lightState = 1;
       }
@@ -515,6 +519,10 @@ void HAL_DFSDM_FilterRegConvCpltCallback(DFSDM_Filter_HandleTypeDef *hdfsdm_filt
 	DFSDM_finished = true;
 }
 
+void HAL_DAC_ConvCpltCallbackCh1 (DAC_HandleTypeDef * hdac) {
+	int a = 1;
+}
+
 /* OTHER STUFF/ HELPER FUNCTIONS*/
 /*
  * Populates an array with values of a sine wave for the DAC (8 bit right alligned)
@@ -539,14 +547,14 @@ void changeWaveFrequency(int frequency) {
 /**
  * Transforms a buffer's values into valid DAC 8bit right aligned values
  */
-void transformBufferToDAC(int32_t *buffer, uint16_t buffer_length) {
-	for (int i = 0; i < buffer_length; i++) {
+void transformBufferToDAC(int32_t *buffer, uint32_t recording_buffer_length, uint32_t total_buffer_length) {
+	for (int i = 0; i < recording_buffer_length; i++) {
 		int32_t val = buffer[i]; // 24-bit value
-		val >> 8;
+		val = val >> 8; // remove this for LOUDER but MORE SCUFFED NOISE
 		// need to map buffer values to 8bit right alligned values (uint8_t)
 		// from experimentation (screaming at the board): min values tend to be -3000 and max seems to be ~1000
-		const int16_t MAX_VAL = 1000;
-		const int16_t MIN_VAL = -3000;
+		const int16_t MAX_VAL = 2000;
+		const int16_t MIN_VAL = -1500;
 		const float a = (255.0)/(MAX_VAL - MIN_VAL); // slope
 
 		// clip buffer values to within [-MIN_VAL, MAX_VAL]
@@ -567,8 +575,58 @@ void transformBufferToDAC(int32_t *buffer, uint16_t buffer_length) {
 		} else {
 			Error_Handler(); // should not happen
 		}
-
 	}
+	// adding the chime at the end of the buffer
+
+    //int32_t step = (total_buffer_length-recording_buffer_length)/16;
+    int8_t sineIndex = 0;
+    /*
+    for (int i=0; i<15;i++){
+        for (int j=recording_buffer_length+(step*i); j<recording_buffer_length+(step*(i+1));j++){
+            int32_t val = sine[sineIndex];
+            if (val >= 0 && val <= 255) {
+                buffer[j] = val; // change the buffer
+            } else {
+                Error_Handler(); // should not happen
+            }
+            sineIndex = (sineIndex+1)%16;
+        }
+   }
+   */
+    /*
+    for (int i=0; i<13;i++){
+        for (int j=recording_buffer_length+(step*i); j<recording_buffer_length+(step*(i+1));j++){
+            int32_t val = sine[sineIndex];
+            if (val >= 0 && val <= 255) {
+                if (i%2==1 && j%4>0){
+                    val=0;
+                } else{
+                    val = sine[j%13];
+                }
+                buffer[j] = val; // change the buffer
+            } else {
+                Error_Handler(); // should not happen
+            }
+        }
+    }
+    */
+
+    int32_t step = (total_buffer_length-recording_buffer_length)/14;
+    for (int i=0; i<13;i++){
+        for (int j=recording_buffer_length+(step*i); j<recording_buffer_length+(step*(i+1));j++){
+            int32_t val = sine[sineIndex];
+            if (i%2==1 && j%15>4 && j%15<13){
+                val=0;
+            } else{
+                val = sine[j%15];
+            }
+            if (val >= 0 && val <= 255) {
+                buffer[j] = val; // change the buffer
+            } else {
+                Error_Handler(); // should not happen
+            }
+        }
+    }
 }
 
 /* USER CODE END 4 */
