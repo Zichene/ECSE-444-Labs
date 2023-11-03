@@ -22,7 +22,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-//#include <stdio.h>
+#include <stdio.h>
+#include <string.h>
 #include "stm32l4s5i_iot01_accelero.h"
 #include "stm32l4s5i_iot01_gyro.h"
 #include "stm32l4s5i_iot01_hsensor.h"
@@ -62,7 +63,9 @@ TIM_HandleTypeDef htim2;
 UART_HandleTypeDef huart1;
 
 osThreadId defaultTaskHandle;
-osThreadId myTask02Handle;
+osThreadId read_sensorsHandle;
+osThreadId checkButtonHandle;
+osThreadId sendToUARTHandle;
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -75,7 +78,9 @@ static void MX_USART1_UART_Init(void);
 static void MX_OCTOSPI1_Init(void);
 static void MX_TIM2_Init(void);
 void StartDefaultTask(void const * argument);
-void StartTask02(void const * argument);
+void OsTask_readSensors(void const * argument);
+void OsTask_checkButton(void const * argument);
+void OsTask_sendToUART(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -86,11 +91,20 @@ void StartTask02(void const * argument);
 // global vars
 // flags for interrupts
 uint8_t tim2_it_flag = false;
+uint8_t buttonPressed = false;
+// global vars
 float temperature = 0;
 float pressure = 0;
 float magneto[3] = {0,0,0};
 float gyro[3] = {0,0,0};
 char message[100] = "";
+enum SENSOR_TYPE {
+	TEMP,
+	PRESSURE,
+	MAGNETOMETER,
+	GYRO
+};
+uint8_t currentSensor = 0;
 /* USER CODE END 0 */
 
 /**
@@ -171,9 +185,17 @@ int main(void)
   osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
-  /* definition and creation of myTask02 */
-  osThreadDef(myTask02, StartTask02, osPriorityNormal, 0, 256);
-  myTask02Handle = osThreadCreate(osThread(myTask02), NULL);
+  /* definition and creation of read_sensors */
+  osThreadDef(read_sensors, OsTask_readSensors, osPriorityNormal, 0, 256);
+  read_sensorsHandle = osThreadCreate(osThread(read_sensors), NULL);
+
+  /* definition and creation of checkButton */
+  osThreadDef(checkButton, OsTask_checkButton, osPriorityNormal, 0, 128);
+  checkButtonHandle = osThreadCreate(osThread(checkButton), NULL);
+
+  /* definition and creation of sendToUART */
+  osThreadDef(sendToUART, OsTask_sendToUART, osPriorityNormal, 0, 256);
+  sendToUARTHandle = osThreadCreate(osThread(sendToUART), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -468,11 +490,18 @@ static void MX_GPIO_Init(void)
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : PB_Blue_Pin */
+  GPIO_InitStruct.Pin = PB_Blue_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(PB_Blue_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LED_Pin */
   GPIO_InitStruct.Pin = LED_Pin;
@@ -481,15 +510,28 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
 
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
 /*------------------------- INTERRUPTS --------------------------*/
+/*
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	tim2_it_flag = (tim2_it_flag+1)%2; // toggle flag
 }
+*/
+void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin) {
+	// button
+	if (GPIO_Pin == PB_Blue_Pin) {
+		buttonPressed = true;
+	}
+}
+
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -510,38 +552,87 @@ void StartDefaultTask(void const * argument)
   /* USER CODE END 5 */
 }
 
-/* USER CODE BEGIN Header_StartTask02 */
+/* USER CODE BEGIN Header_OsTask_readSensors */
 /**
-* @brief Function implementing the myTask02 thread.
+* @brief Function implementing the read_sensors thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_StartTask02 */
-void StartTask02(void const * argument)
+/* USER CODE END Header_OsTask_readSensors */
+void OsTask_readSensors(void const * argument)
 {
-  /* USER CODE BEGIN StartTask02 */
+  /* USER CODE BEGIN OsTask_readSensors */
   /* Infinite loop */
   for(;;)
   {
-	  temperature = BSP_TSENSOR_ReadTemp();
-	  pressure = BSP_PSENSOR_ReadPressure();
-	  BSP_MAGNETO_GetXYZ(magneto);
-	  BSP_GYRO_GetXYZ(gyro);
-	  snprintf(message, 200, "Temperature: %f\r\n", temperature);
-	  HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
-	  memset(message, 0, sizeof(message));
-	  snprintf(message, 200, "Pressure: %f\r\n", pressure);
-	  HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
-	  memset(message, 0, sizeof(message));
-	  snprintf(message, 200, "MagnetoX: %f, MagnetoY: %f, MagnetoZ: %f\r\n", magneto[0], magneto[1], magneto[2]);
-	  HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
-	  memset(message, 0, sizeof(message));
-	  snprintf(message, 200, "GyroX: %f, GyroY: %f, GyroZ: %f\r\n", gyro[0], gyro[1], gyro[2]);
-	  HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
-	  memset(message, 0, sizeof(message));
-    osDelay(2000);
+  temperature = BSP_TSENSOR_ReadTemp();
+  pressure = BSP_PSENSOR_ReadPressure();
+  BSP_MAGNETO_GetXYZ(magneto);
+  BSP_GYRO_GetXYZ(gyro);
+  osDelay(1000);
   }
-  /* USER CODE END StartTask02 */
+  /* USER CODE END OsTask_readSensors */
+}
+
+/* USER CODE BEGIN Header_OsTask_checkButton */
+/**
+* @brief Function implementing the checkButton thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_OsTask_checkButton */
+void OsTask_checkButton(void const * argument)
+{
+  /* USER CODE BEGIN OsTask_checkButton */
+  /* Infinite loop */
+  for(;;)
+  {
+	while(true) {
+		if (buttonPressed)
+			break;
+	}
+	buttonPressed = false;
+	currentSensor = (currentSensor+1)%4; // toggle sensorType
+    osDelay(1);
+  }
+  /* USER CODE END OsTask_checkButton */
+}
+
+/* USER CODE BEGIN Header_OsTask_sendToUART */
+/**
+* @brief Function implementing the sendToUART thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_OsTask_sendToUART */
+void OsTask_sendToUART(void const * argument)
+{
+  /* USER CODE BEGIN OsTask_sendToUART */
+  /* Infinite loop */
+  for(;;)
+  {
+	snprintf(message, 200, "currentSensor: %d\r\n",currentSensor);
+	HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
+	memset(message, 0, sizeof(message));
+	switch (currentSensor) {
+		case TEMP:
+			snprintf(message, 100, "Temperature: %f\r\n",temperature);
+			break;
+		case PRESSURE:
+			snprintf(message, 200, "Pressure: %f\r\n", pressure);
+		    break;
+		case MAGNETOMETER:
+			snprintf(message, 200, "MagnetoX: %f, MagnetoY: %f, MagnetoZ: %f\r\n", magneto[0], magneto[1], magneto[2]);
+			break;
+		case GYRO:
+			snprintf(message, 200, "GyroX: %f, GyroY: %f, GyroZ: %f\r\n", gyro[0], gyro[1], gyro[2]);
+			break;
+	}
+	HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
+	memset(message, 0, sizeof(message));
+	osDelay(1000);
+  }
+  /* USER CODE END OsTask_sendToUART */
 }
 
 /**
