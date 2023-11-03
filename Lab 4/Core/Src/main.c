@@ -18,10 +18,21 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+//#include <stdio.h>
+#include "stm32l4s5i_iot01_accelero.h"
+#include "stm32l4s5i_iot01_gyro.h"
+#include "stm32l4s5i_iot01_hsensor.h"
+#include "stm32l4s5i_iot01_magneto.h"
+#include "stm32l4s5i_iot01_psensor.h"
+#include "stm32l4s5i_iot01_tsensor.h"
+#include "stm32l4s5i_iot01.h"
+#include "stm32l4xx_it.h"
+#include "stm32l4xx_hal_conf.h"
+#include "stm32l4s5i_iot01_qspi.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -31,7 +42,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define true 1
+#define false 0
+#define WRITE_READ_ADDR 0x00
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -40,15 +53,16 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-DAC_HandleTypeDef hdac1;
-DMA_HandleTypeDef hdma_dac1_ch1;
+I2C_HandleTypeDef hi2c2;
 
-DFSDM_Filter_HandleTypeDef hdfsdm1_filter0;
-DFSDM_Channel_HandleTypeDef hdfsdm1_channel2;
-DMA_HandleTypeDef hdma_dfsdm1_flt0;
+OSPI_HandleTypeDef hospi1;
 
 TIM_HandleTypeDef htim2;
 
+UART_HandleTypeDef huart1;
+
+osThreadId defaultTaskHandle;
+osThreadId myTask02Handle;
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -56,17 +70,27 @@ TIM_HandleTypeDef htim2;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
-static void MX_DAC1_Init(void);
+static void MX_I2C2_Init(void);
+static void MX_USART1_UART_Init(void);
+static void MX_OCTOSPI1_Init(void);
 static void MX_TIM2_Init(void);
-static void MX_DFSDM1_Init(void);
+void StartDefaultTask(void const * argument);
+void StartTask02(void const * argument);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+// global vars
+// flags for interrupts
+uint8_t tim2_it_flag = false;
+float temperature = 0;
+float pressure = 0;
+float magneto[3] = {0,0,0};
+float gyro[3] = {0,0,0};
+char message[100] = "";
 /* USER CODE END 0 */
 
 /**
@@ -76,6 +100,13 @@ static void MX_DFSDM1_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+	void * Addr_Start = WRITE_READ_ADDR;
+	void * Addr_Read = WRITE_READ_ADDR;
+
+	uint8_t example_arr[5] = { 0, 1, 2, 3, 4};
+	uint8_t example_copy[5] = { 0, 0, 0, 0, 0};
+
+	//uint8_t example_arr2[5] = {69,1,420,1,69};
 
   /* USER CODE END 1 */
 
@@ -97,18 +128,88 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
-  MX_DAC1_Init();
+  MX_I2C2_Init();
+  MX_USART1_UART_Init();
+  MX_OCTOSPI1_Init();
   MX_TIM2_Init();
-  MX_DFSDM1_Init();
   /* USER CODE BEGIN 2 */
+  HAL_TIM_Base_Start_IT(&htim2);
+  // init stuff
+  // humidity & temp
+  BSP_HSENSOR_Init();
+  BSP_TSENSOR_Init();
+  // pressure
+  BSP_PSENSOR_Init();
+  // accel & gyro
+  BSP_ACCELERO_Init();
+  BSP_GYRO_Init();
+  // magnetometer
+  BSP_MAGNETO_Init();
+  // qspi
+  BSP_QSPI_Init();
 
   /* USER CODE END 2 */
 
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* definition and creation of defaultTask */
+  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
+  defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+
+  /* definition and creation of myTask02 */
+  osThreadDef(myTask02, StartTask02, osPriorityNormal, 0, 256);
+  myTask02Handle = osThreadCreate(osThread(myTask02), NULL);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  /*
+	  temperature = BSP_TSENSOR_ReadTemp();
+	  BSP_GYRO_GetXYZ(gyro);
+	  snprintf(message, 200, "GyroX: %f, GyroY: %f, GyroZ: %f\r\n", gyro[0], gyro[1], gyro[2]);
+	  HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
+	  */
+	  /*
+
+	  while (!tim2_it_flag) {
+
+	  }
+	  tim2_it_flag = false; // reset flag
+*/
+/*
+	  if (BSP_QSPI_Erase_Block((uint32_t) WRITE_READ_ADDR) != QSPI_OK)
+		  Error_Handler();
+	  if (BSP_QSPI_Write(example_arr, (uint32_t) WRITE_READ_ADDR,sizeof(example_arr)) != QSPI_OK)
+		  Error_Handler();
+	  if (BSP_QSPI_Read(example_copy, (uint32_t) WRITE_READ_ADDR,sizeof(example_copy)) != QSPI_OK)
+		  Error_Handler();
+		  */
+
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -167,107 +268,98 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief DAC1 Initialization Function
+  * @brief I2C2 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_DAC1_Init(void)
+static void MX_I2C2_Init(void)
 {
 
-  /* USER CODE BEGIN DAC1_Init 0 */
+  /* USER CODE BEGIN I2C2_Init 0 */
 
-  /* USER CODE END DAC1_Init 0 */
+  /* USER CODE END I2C2_Init 0 */
 
-  DAC_ChannelConfTypeDef sConfig = {0};
+  /* USER CODE BEGIN I2C2_Init 1 */
 
-  /* USER CODE BEGIN DAC1_Init 1 */
-
-  /* USER CODE END DAC1_Init 1 */
-
-  /** DAC Initialization
-  */
-  hdac1.Instance = DAC1;
-  if (HAL_DAC_Init(&hdac1) != HAL_OK)
+  /* USER CODE END I2C2_Init 1 */
+  hi2c2.Instance = I2C2;
+  hi2c2.Init.Timing = 0x307075B1;
+  hi2c2.Init.OwnAddress1 = 0;
+  hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c2.Init.OwnAddress2 = 0;
+  hi2c2.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c2) != HAL_OK)
   {
     Error_Handler();
   }
 
-  /** DAC channel OUT1 config
+  /** Configure Analogue filter
   */
-  sConfig.DAC_SampleAndHold = DAC_SAMPLEANDHOLD_DISABLE;
-  sConfig.DAC_Trigger = DAC_TRIGGER_T2_TRGO;
-  sConfig.DAC_HighFrequency = DAC_HIGH_FREQUENCY_INTERFACE_MODE_ABOVE_80MHZ;
-  sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
-  sConfig.DAC_ConnectOnChipPeripheral = DAC_CHIPCONNECT_DISABLE;
-  sConfig.DAC_UserTrimming = DAC_TRIMMING_FACTORY;
-  if (HAL_DAC_ConfigChannel(&hdac1, &sConfig, DAC_CHANNEL_1) != HAL_OK)
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c2, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
   {
     Error_Handler();
   }
 
-  /** DAC channel OUT2 config
+  /** Configure Digital filter
   */
-  sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
-  if (HAL_DAC_ConfigChannel(&hdac1, &sConfig, DAC_CHANNEL_2) != HAL_OK)
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c2, 0) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN DAC1_Init 2 */
+  /* USER CODE BEGIN I2C2_Init 2 */
 
-  /* USER CODE END DAC1_Init 2 */
+  /* USER CODE END I2C2_Init 2 */
 
 }
 
 /**
-  * @brief DFSDM1 Initialization Function
+  * @brief OCTOSPI1 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_DFSDM1_Init(void)
+static void MX_OCTOSPI1_Init(void)
 {
 
-  /* USER CODE BEGIN DFSDM1_Init 0 */
+  /* USER CODE BEGIN OCTOSPI1_Init 0 */
 
-  /* USER CODE END DFSDM1_Init 0 */
+  /* USER CODE END OCTOSPI1_Init 0 */
 
-  /* USER CODE BEGIN DFSDM1_Init 1 */
+  OSPIM_CfgTypeDef OSPIM_Cfg_Struct = {0};
 
-  /* USER CODE END DFSDM1_Init 1 */
-  hdfsdm1_filter0.Instance = DFSDM1_Filter0;
-  hdfsdm1_filter0.Init.RegularParam.Trigger = DFSDM_FILTER_SW_TRIGGER;
-  hdfsdm1_filter0.Init.RegularParam.FastMode = ENABLE;
-  hdfsdm1_filter0.Init.RegularParam.DmaMode = ENABLE;
-  hdfsdm1_filter0.Init.FilterParam.SincOrder = DFSDM_FILTER_FASTSINC_ORDER;
-  hdfsdm1_filter0.Init.FilterParam.Oversampling = 100;
-  hdfsdm1_filter0.Init.FilterParam.IntOversampling = 1;
-  if (HAL_DFSDM_FilterInit(&hdfsdm1_filter0) != HAL_OK)
+  /* USER CODE BEGIN OCTOSPI1_Init 1 */
+
+  /* USER CODE END OCTOSPI1_Init 1 */
+  /* OCTOSPI1 parameter configuration*/
+  hospi1.Instance = OCTOSPI1;
+  hospi1.Init.FifoThreshold = 1;
+  hospi1.Init.DualQuad = HAL_OSPI_DUALQUAD_DISABLE;
+  hospi1.Init.MemoryType = HAL_OSPI_MEMTYPE_MICRON;
+  hospi1.Init.DeviceSize = 32;
+  hospi1.Init.ChipSelectHighTime = 1;
+  hospi1.Init.FreeRunningClock = HAL_OSPI_FREERUNCLK_DISABLE;
+  hospi1.Init.ClockMode = HAL_OSPI_CLOCK_MODE_0;
+  hospi1.Init.ClockPrescaler = 1;
+  hospi1.Init.SampleShifting = HAL_OSPI_SAMPLE_SHIFTING_NONE;
+  hospi1.Init.DelayHoldQuarterCycle = HAL_OSPI_DHQC_DISABLE;
+  hospi1.Init.ChipSelectBoundary = 0;
+  hospi1.Init.DelayBlockBypass = HAL_OSPI_DELAY_BLOCK_BYPASSED;
+  if (HAL_OSPI_Init(&hospi1) != HAL_OK)
   {
     Error_Handler();
   }
-  hdfsdm1_channel2.Instance = DFSDM1_Channel2;
-  hdfsdm1_channel2.Init.OutputClock.Activation = ENABLE;
-  hdfsdm1_channel2.Init.OutputClock.Selection = DFSDM_CHANNEL_OUTPUT_CLOCK_SYSTEM;
-  hdfsdm1_channel2.Init.OutputClock.Divider = 50;
-  hdfsdm1_channel2.Init.Input.Multiplexer = DFSDM_CHANNEL_EXTERNAL_INPUTS;
-  hdfsdm1_channel2.Init.Input.DataPacking = DFSDM_CHANNEL_STANDARD_MODE;
-  hdfsdm1_channel2.Init.Input.Pins = DFSDM_CHANNEL_SAME_CHANNEL_PINS;
-  hdfsdm1_channel2.Init.SerialInterface.Type = DFSDM_CHANNEL_SPI_RISING;
-  hdfsdm1_channel2.Init.SerialInterface.SpiClock = DFSDM_CHANNEL_SPI_CLOCK_INTERNAL;
-  hdfsdm1_channel2.Init.Awd.FilterOrder = DFSDM_CHANNEL_FASTSINC_ORDER;
-  hdfsdm1_channel2.Init.Awd.Oversampling = 1;
-  hdfsdm1_channel2.Init.Offset = 0;
-  hdfsdm1_channel2.Init.RightBitShift = 0x00;
-  if (HAL_DFSDM_ChannelInit(&hdfsdm1_channel2) != HAL_OK)
+  OSPIM_Cfg_Struct.ClkPort = 1;
+  OSPIM_Cfg_Struct.NCSPort = 1;
+  OSPIM_Cfg_Struct.IOLowPort = HAL_OSPIM_IOPORT_1_LOW;
+  if (HAL_OSPIM_Config(&hospi1, &OSPIM_Cfg_Struct, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     Error_Handler();
   }
-  if (HAL_DFSDM_FilterConfigRegChannel(&hdfsdm1_filter0, DFSDM_CHANNEL_2, DFSDM_CONTINUOUS_CONV_ON) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN DFSDM1_Init 2 */
+  /* USER CODE BEGIN OCTOSPI1_Init 2 */
 
-  /* USER CODE END DFSDM1_Init 2 */
+  /* USER CODE END OCTOSPI1_Init 2 */
 
 }
 
@@ -304,7 +396,7 @@ static void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
   {
@@ -317,22 +409,50 @@ static void MX_TIM2_Init(void)
 }
 
 /**
-  * Enable DMA controller clock
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
   */
-static void MX_DMA_Init(void)
+static void MX_USART1_UART_Init(void)
 {
 
-  /* DMA controller clock enable */
-  __HAL_RCC_DMAMUX1_CLK_ENABLE();
-  __HAL_RCC_DMA1_CLK_ENABLE();
+  /* USER CODE BEGIN USART1_Init 0 */
 
-  /* DMA interrupt init */
-  /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-  /* DMA1_Channel2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart1.Init.ClockPrescaler = UART_PRESCALER_DIV1;
+  huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_SetTxFifoThreshold(&huart1, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_SetRxFifoThreshold(&huart1, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_DisableFifoMode(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
 
 }
 
@@ -348,19 +468,11 @@ static void MX_GPIO_Init(void)
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : PB_BLUE_Pin */
-  GPIO_InitStruct.Pin = PB_BLUE_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(PB_BLUE_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LED_Pin */
   GPIO_InitStruct.Pin = LED_Pin;
@@ -369,17 +481,68 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
 
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
-
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
-
+/*------------------------- INTERRUPTS --------------------------*/
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	tim2_it_flag = (tim2_it_flag+1)%2; // toggle flag
+}
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_StartDefaultTask */
+/**
+  * @brief  Function implementing the defaultTask thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_StartDefaultTask */
+void StartDefaultTask(void const * argument)
+{
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_StartTask02 */
+/**
+* @brief Function implementing the myTask02 thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTask02 */
+void StartTask02(void const * argument)
+{
+  /* USER CODE BEGIN StartTask02 */
+  /* Infinite loop */
+  for(;;)
+  {
+	  temperature = BSP_TSENSOR_ReadTemp();
+	  pressure = BSP_PSENSOR_ReadPressure();
+	  BSP_MAGNETO_GetXYZ(magneto);
+	  BSP_GYRO_GetXYZ(gyro);
+	  snprintf(message, 200, "Temperature: %f\r\n", temperature);
+	  HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
+	  memset(message, 0, sizeof(message));
+	  snprintf(message, 200, "Pressure: %f\r\n", pressure);
+	  HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
+	  memset(message, 0, sizeof(message));
+	  snprintf(message, 200, "MagnetoX: %f, MagnetoY: %f, MagnetoZ: %f\r\n", magneto[0], magneto[1], magneto[2]);
+	  HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
+	  memset(message, 0, sizeof(message));
+	  snprintf(message, 200, "GyroX: %f, GyroY: %f, GyroZ: %f\r\n", gyro[0], gyro[1], gyro[2]);
+	  HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
+	  memset(message, 0, sizeof(message));
+    osDelay(2000);
+  }
+  /* USER CODE END StartTask02 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
