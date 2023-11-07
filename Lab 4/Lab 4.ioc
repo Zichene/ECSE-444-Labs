@@ -2,7 +2,7 @@
 CAD.formats=
 CAD.pinconfig=
 CAD.provider=
-FREERTOS.FootprintOK=false
+FREERTOS.FootprintOK=true
 FREERTOS.IPParameters=Tasks01,FootprintOK,configTOTAL_HEAP_SIZE
 FREERTOS.Tasks01=defaultTask,0,128,StartDefaultTask,Default,NULL,Dynamic,NULL,NULL;read_sensors,0,256,OsTask_readSensors,Default,NULL,Dynamic,NULL,NULL;checkButton,0,128,OsTask_checkButton,Default,NULL,Dynamic,NULL,NULL;sendToUART,0,256,OsTask_sendToUART,Default,NULL,Dynamic,NULL,NULL
 FREERTOS.configTOTAL_HEAP_SIZE=5000
