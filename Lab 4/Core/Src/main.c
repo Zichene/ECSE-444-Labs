@@ -45,7 +45,11 @@
 /* USER CODE BEGIN PD */
 #define true 1
 #define false 0
-#define WRITE_READ_ADDR 0x00
+#define WRITE_READ_ADDR_TEMP 0x0000
+#define WRITE_READ_ADDR_PRESSURE 0x1000
+#define WRITE_READ_ADDR_GYROX 0x2000
+#define WRITE_READ_ADDR_MAGNETOX 0x3000
+#define MAX_SAMPLES 1000 // maximum values for samples
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -83,7 +87,10 @@ void OsTask_checkButton(void const * argument);
 void OsTask_sendToUART(void const * argument);
 
 /* USER CODE BEGIN PFP */
-
+void writeSensorsToFlash(void);
+void readSampleFlash(void);
+void computeAvg();
+void computeVariance();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -97,12 +104,20 @@ float temperature = 0;
 float pressure = 0;
 float magneto[3] = {0,0,0};
 float gyro[3] = {0,0,0};
-char message[100] = "";
+float tempVals[1000];
+float pressureVals[1000];
+float magnetoXVals[1000];
+float gyroXVals[1000];
+uint16_t numSamples = 0;
+float samplesAvg[4];
+float samplesVariance[4];
+char message[200] = "";
 enum SENSOR_TYPE {
 	TEMP,
 	PRESSURE,
 	MAGNETOMETER,
-	GYRO
+	GYRO,
+	STATISTICS
 };
 uint8_t currentSensor = 0;
 /* USER CODE END 0 */
@@ -114,11 +129,6 @@ uint8_t currentSensor = 0;
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	void * Addr_Start = WRITE_READ_ADDR;
-	void * Addr_Read = WRITE_READ_ADDR;
-
-	uint8_t example_arr[5] = { 0, 1, 2, 3, 4};
-	uint8_t example_copy[5] = { 0, 0, 0, 0, 0};
 
 	//uint8_t example_arr2[5] = {69,1,420,1,69};
 
@@ -198,6 +208,11 @@ int main(void)
   sendToUARTHandle = osThreadCreate(osThread(sendToUART), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
+	// erase block
+  if (BSP_QSPI_Erase_Block(0) != QSPI_OK)
+	 Error_Handler();
+  // reset error LED
+  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
 
@@ -532,6 +547,67 @@ void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin) {
 	}
 }
 
+/**
+ * Write using sensor data using QSPI to flash
+ */
+void writeSensorsToFlash() {
+	if (numSamples <= MAX_SAMPLES) {
+		// writing to flash
+		if (BSP_QSPI_Write(&temperature, WRITE_READ_ADDR_TEMP+numSamples*sizeof(float), sizeof(float)) != QSPI_OK)
+			Error_Handler();
+		if (BSP_QSPI_Write(&pressure, WRITE_READ_ADDR_PRESSURE+numSamples*sizeof(float), sizeof(float)) != QSPI_OK)
+			Error_Handler();
+		if (BSP_QSPI_Write(magneto, WRITE_READ_ADDR_MAGNETOX+numSamples*sizeof(float), sizeof(float)) != QSPI_OK)
+			Error_Handler();
+		if (BSP_QSPI_Write(gyro, WRITE_READ_ADDR_GYROX+numSamples*sizeof(float), sizeof(float)) != QSPI_OK)
+			Error_Handler();
+		// increment num of values
+		numSamples++;
+	} else {
+		// we have reached a maximum amount of data, erase block and reset counter
+		if (BSP_QSPI_Erase_Block(0) != QSPI_OK)
+			Error_Handler();
+		numSamples = 0;
+	}
+}
+
+/**
+ * Read values stored in flash
+ */
+void readSampleFlash() {
+	// read all sensor values
+	if (BSP_QSPI_Read(tempVals, WRITE_READ_ADDR_TEMP, numSamples*sizeof(float)) != QSPI_OK)
+		Error_Handler();
+	if (BSP_QSPI_Read(pressureVals, WRITE_READ_ADDR_PRESSURE, numSamples*sizeof(float)) != QSPI_OK)
+		Error_Handler();
+	if (BSP_QSPI_Read(magnetoXVals, WRITE_READ_ADDR_MAGNETOX, numSamples*sizeof(float)) != QSPI_OK)
+		Error_Handler();
+	if (BSP_QSPI_Read(gyroXVals, WRITE_READ_ADDR_GYROX, numSamples*sizeof(float)) != QSPI_OK)
+		Error_Handler();
+}
+
+/**
+ * Computes the averages of all the samples, stores them in samplesAvg global array
+ */
+void computeAvg() {
+	float sumTemp;
+	float sumPressure;
+	float sumMagnetoX;
+	float sumGyroX;
+	for (int i = 0; i < numSamples; i++) {
+		sumTemp += tempVals[i];
+		sumPressure += pressureVals[i];
+		sumMagnetoX += magnetoXVals[i];
+		sumGyroX += gyroXVals[i];
+	}
+	if (numSamples != 0) {
+		samplesAvg[TEMP] = sumTemp/numSamples;
+		samplesAvg[PRESSURE] = sumPressure/numSamples;
+		samplesAvg[MAGNETOMETER] = sumMagnetoX/numSamples;
+		samplesAvg[GYRO] = sumGyroX/numSamples;
+	}
+}
+
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -569,6 +645,8 @@ void OsTask_readSensors(void const * argument)
   pressure = BSP_PSENSOR_ReadPressure();
   BSP_MAGNETO_GetXYZ(magneto);
   BSP_GYRO_GetXYZ(gyro);
+  writeSensorsToFlash();
+  readSampleFlash();
   osDelay(1000);
   }
   /* USER CODE END OsTask_readSensors */
@@ -592,7 +670,7 @@ void OsTask_checkButton(void const * argument)
 			break;
 	}
 	buttonPressed = false;
-	currentSensor = (currentSensor+1)%4; // toggle sensorType
+	currentSensor = (currentSensor+1)%5; // toggle sensorType
     osDelay(1);
   }
   /* USER CODE END OsTask_checkButton */
@@ -611,12 +689,23 @@ void OsTask_sendToUART(void const * argument)
   /* Infinite loop */
   for(;;)
   {
+	if (currentSensor == STATISTICS) {
+		readSampleFlash();
+		computeAvg();
+		snprintf(message, 200, "Current statistics over %d samples: \r\n \t\t Temp \t\t Pressure \t\t  MagnetoX \t\t GyroX  \r\n\r\n Average \t %f \t %f \t\t %f \t\t %f\r\n", numSamples, samplesAvg[TEMP], samplesAvg[PRESSURE], samplesAvg[MAGNETOMETER], samplesAvg[GYRO]);
+		HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
+		memset(message, 0, sizeof(message));
+		while (currentSensor == STATISTICS) {
+			// wait for button press
+		}
+		continue;
+	}
 	snprintf(message, 200, "currentSensor: %d\r\n",currentSensor);
 	HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
 	memset(message, 0, sizeof(message));
 	switch (currentSensor) {
 		case TEMP:
-			snprintf(message, 100, "Temperature: %f\r\n",temperature);
+			snprintf(message, 200, "Temperature: %f\r\n",temperature);
 			break;
 		case PRESSURE:
 			snprintf(message, 200, "Pressure: %f\r\n", pressure);
@@ -646,6 +735,7 @@ void Error_Handler(void)
   __disable_irq();
   while (1)
   {
+	  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
   }
   /* USER CODE END Error_Handler_Debug */
 }
