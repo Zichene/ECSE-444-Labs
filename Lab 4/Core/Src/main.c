@@ -89,8 +89,8 @@ void OsTask_sendToUART(void const * argument);
 /* USER CODE BEGIN PFP */
 void writeSensorsToFlash(void);
 void readSampleFlash(void);
-void computeAvg();
-void computeVariance();
+void computeAvg(void);
+void computeStats(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -608,6 +608,36 @@ void computeAvg() {
 	}
 }
 
+void computeStats(){
+    computeAvg();
+    float avgTemp;
+    float avgPressure;
+    float avgMagnetoX;
+    float avgGyroX;
+    float varianceSumTemp;
+    float varianceSumPressure;
+    float varianceSumMagnetoX;
+    float varianceSumGyroX;
+    if (numSamples != 0) {
+        avgTemp=samplesAvg[TEMP];
+        avgPressure=samplesAvg[PRESSURE];
+        avgMagnetoX=samplesAvg[MAGNETOMETER];
+        avgGyroX=samplesAvg[GYRO];
+
+        for (int i=0; i < numSamples;i++){
+            varianceSumTemp += (tempVals[i]-avgTemp)*(tempVals[i]-avgTemp);
+            varianceSumPressure += (pressureVals[i]-avgPressure)*(pressureVals[i]-avgPressure);
+            varianceSumMagnetoX += (magnetoXVals[i]-avgMagnetoX)*(magnetoXVals[i]-avgMagnetoX);
+            varianceSumGyroX += (gyroXVals[i]-avgGyroX)*(gyroXVals[i]-avgGyroX);
+        }
+        samplesVariance[TEMP] = varianceSumTemp/(numSamples-1);
+        samplesVariance[PRESSURE] = varianceSumPressure/(numSamples-1);
+        samplesVariance[MAGNETOMETER] = varianceSumMagnetoX/(numSamples-1);
+        samplesVariance[GYRO] = varianceSumGyroX/(numSamples-1);
+    }
+
+}
+
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -691,8 +721,11 @@ void OsTask_sendToUART(void const * argument)
   {
 	if (currentSensor == STATISTICS) {
 		readSampleFlash();
-		computeAvg();
+		computeStats();
 		snprintf(message, 200, "Current statistics over %d samples: \r\n \t\t Temp \t\t Pressure \t\t  MagnetoX \t\t GyroX  \r\n\r\n Average \t %f \t %f \t\t %f \t\t %f\r\n", numSamples, samplesAvg[TEMP], samplesAvg[PRESSURE], samplesAvg[MAGNETOMETER], samplesAvg[GYRO]);
+		HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
+		memset(message, 0, sizeof(message));
+		snprintf(message, 200, "\r\n\r\n Variance \t %f \t %f \t\t %f \t\t %f\r\n",samplesVariance[TEMP], samplesVariance[PRESSURE], samplesVariance[MAGNETOMETER], samplesVariance[GYRO]);
 		HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
 		memset(message, 0, sizeof(message));
 		while (currentSensor == STATISTICS) {
