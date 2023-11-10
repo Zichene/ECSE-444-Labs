@@ -48,7 +48,11 @@
 #define WRITE_READ_ADDR_TEMP 0x0000
 #define WRITE_READ_ADDR_PRESSURE 0x1000
 #define WRITE_READ_ADDR_GYROX 0x2000
-#define WRITE_READ_ADDR_MAGNETOX 0x3000
+#define WRITE_READ_ADDR_GYROY 0x3000
+#define WRITE_READ_ADDR_GYROZ 0x4000
+#define WRITE_READ_ADDR_MAGNETOX 0x5000
+#define WRITE_READ_ADDR_MAGNETOY 0x6000
+#define WRITE_READ_ADDR_MAGNETOZ 0x7000
 #define MAX_SAMPLES 1000 // maximum values for samples
 /* USER CODE END PD */
 
@@ -102,15 +106,19 @@ uint8_t buttonPressed = false;
 // global vars
 float temperature = 0;
 float pressure = 0;
-float magneto[3] = {0,0,0};
+int16_t magneto[3] = {0,0,0};
 float gyro[3] = {0,0,0};
 float tempVals[1000];
 float pressureVals[1000];
-float magnetoXVals[1000];
+int16_t magnetoXVals[1000];
+int16_t magnetoYVals[1000];
+int16_t magnetoZVals[1000];
 float gyroXVals[1000];
+float gyroYVals[1000];
+float gyroZVals[1000];
 uint16_t numSamples = 0;
-float samplesAvg[4];
-float samplesVariance[4];
+float samplesAvg[8];
+float samplesVariance[8];
 char message[200] = "";
 enum SENSOR_TYPE {
 	TEMP,
@@ -118,6 +126,16 @@ enum SENSOR_TYPE {
 	MAGNETOMETER,
 	GYRO,
 	STATISTICS
+};
+enum SENSOR_VALS {
+	TEMP_VAL,
+	PRESSURE_VAL,
+	MAG_X_VAL,
+	MAG_Y_VAL,
+	MAG_Z_VAL,
+	GYRO_X_VAL,
+	GYRO_Y_VAL,
+	GYRO_Z_VAL
 };
 uint8_t currentSensor = 0;
 /* USER CODE END 0 */
@@ -210,6 +228,8 @@ int main(void)
   /* USER CODE BEGIN RTOS_THREADS */
 	// erase block
   if (BSP_QSPI_Erase_Block(0) != QSPI_OK)
+	 Error_Handler();
+  if (BSP_QSPI_Erase_Block(1) != QSPI_OK)
 	 Error_Handler();
   // reset error LED
   HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
@@ -557,9 +577,17 @@ void writeSensorsToFlash() {
 			Error_Handler();
 		if (BSP_QSPI_Write(&pressure, WRITE_READ_ADDR_PRESSURE+numSamples*sizeof(float), sizeof(float)) != QSPI_OK)
 			Error_Handler();
-		if (BSP_QSPI_Write(magneto, WRITE_READ_ADDR_MAGNETOX+numSamples*sizeof(float), sizeof(float)) != QSPI_OK)
+		if (BSP_QSPI_Write(magneto, WRITE_READ_ADDR_MAGNETOX+numSamples*sizeof(int16_t), sizeof(int16_t)) != QSPI_OK)
+			Error_Handler();
+		if (BSP_QSPI_Write(&(magneto[1]), WRITE_READ_ADDR_MAGNETOY+numSamples*sizeof(int16_t), sizeof(int16_t)) != QSPI_OK)
+			Error_Handler();
+		if (BSP_QSPI_Write(&(magneto[2]), WRITE_READ_ADDR_MAGNETOZ+numSamples*sizeof(int16_t), sizeof(int16_t)) != QSPI_OK)
 			Error_Handler();
 		if (BSP_QSPI_Write(gyro, WRITE_READ_ADDR_GYROX+numSamples*sizeof(float), sizeof(float)) != QSPI_OK)
+			Error_Handler();
+		if (BSP_QSPI_Write(&(gyro[1]), WRITE_READ_ADDR_GYROY+numSamples*sizeof(float), sizeof(float)) != QSPI_OK)
+			Error_Handler();
+		if (BSP_QSPI_Write(&(gyro[2]), WRITE_READ_ADDR_GYROZ+numSamples*sizeof(float), sizeof(float)) != QSPI_OK)
 			Error_Handler();
 		// increment num of values
 		numSamples++;
@@ -582,7 +610,15 @@ void readSampleFlash() {
 		Error_Handler();
 	if (BSP_QSPI_Read(magnetoXVals, WRITE_READ_ADDR_MAGNETOX, numSamples*sizeof(float)) != QSPI_OK)
 		Error_Handler();
+	if (BSP_QSPI_Read(magnetoYVals, WRITE_READ_ADDR_MAGNETOY, numSamples*sizeof(float)) != QSPI_OK)
+		Error_Handler();
+	if (BSP_QSPI_Read(magnetoZVals, WRITE_READ_ADDR_MAGNETOZ, numSamples*sizeof(float)) != QSPI_OK)
+		Error_Handler();
 	if (BSP_QSPI_Read(gyroXVals, WRITE_READ_ADDR_GYROX, numSamples*sizeof(float)) != QSPI_OK)
+		Error_Handler();
+	if (BSP_QSPI_Read(gyroYVals, WRITE_READ_ADDR_GYROY, numSamples*sizeof(float)) != QSPI_OK)
+		Error_Handler();
+	if (BSP_QSPI_Read(gyroZVals, WRITE_READ_ADDR_GYROZ, numSamples*sizeof(float)) != QSPI_OK)
 		Error_Handler();
 }
 
@@ -593,18 +629,32 @@ void computeAvg() {
 	float sumTemp;
 	float sumPressure;
 	float sumMagnetoX;
+	float sumMagnetoY;
+	float sumMagnetoZ;
 	float sumGyroX;
+	float sumGyroY;
+	float sumGyroZ;
 	for (int i = 0; i < numSamples; i++) {
 		sumTemp += tempVals[i];
 		sumPressure += pressureVals[i];
-		sumMagnetoX += magnetoXVals[i];
+		sumMagnetoX += (float)magnetoXVals[i];
+		sumMagnetoY += (float)magnetoYVals[i];
+		sumMagnetoZ += (float)magnetoZVals[i];
 		sumGyroX += gyroXVals[i];
+		sumGyroY += gyroYVals[i];
+		sumGyroZ += gyroZVals[i];
+
 	}
 	if (numSamples != 0) {
-		samplesAvg[TEMP] = sumTemp/numSamples;
-		samplesAvg[PRESSURE] = sumPressure/numSamples;
-		samplesAvg[MAGNETOMETER] = sumMagnetoX/numSamples;
-		samplesAvg[GYRO] = sumGyroX/numSamples;
+		samplesAvg[TEMP_VAL] = sumTemp/numSamples;
+		samplesAvg[PRESSURE_VAL] = sumPressure/numSamples;
+		samplesAvg[MAG_X_VAL] = sumMagnetoX/numSamples;
+		samplesAvg[MAG_Y_VAL] = sumMagnetoY/numSamples;
+		samplesAvg[MAG_Z_VAL] = sumMagnetoZ/numSamples;
+		samplesAvg[GYRO_X_VAL] = sumGyroX/numSamples;
+		samplesAvg[GYRO_Y_VAL] = sumGyroY/numSamples;
+		samplesAvg[GYRO_Z_VAL] = sumGyroZ/numSamples;
+
 	}
 }
 
@@ -612,28 +662,50 @@ void computeStats(){
     computeAvg();
     float avgTemp;
     float avgPressure;
-    float avgMagnetoX;
-    float avgGyroX;
-    float varianceSumTemp;
+	float avgMagnetoX;
+	float avgMagnetoY;
+	float avgMagnetoZ;
+	float avgGyroX;
+	float avgGyroY;
+	float avgGyroZ;
+	float varianceSumTemp;
     float varianceSumPressure;
     float varianceSumMagnetoX;
+    float varianceSumMagnetoY;
+    float varianceSumMagnetoZ;
     float varianceSumGyroX;
+    float varianceSumGyroY;
+    float varianceSumGyroZ;
     if (numSamples != 0) {
-        avgTemp=samplesAvg[TEMP];
-        avgPressure=samplesAvg[PRESSURE];
-        avgMagnetoX=samplesAvg[MAGNETOMETER];
-        avgGyroX=samplesAvg[GYRO];
+        avgTemp=samplesAvg[TEMP_VAL];
+        avgPressure=samplesAvg[PRESSURE_VAL];
+        avgMagnetoX=(float)samplesAvg[MAG_X_VAL];
+        avgMagnetoY=(float)samplesAvg[MAG_Y_VAL];
+        avgMagnetoZ=(float)samplesAvg[MAG_Z_VAL];
+        avgGyroX=samplesAvg[GYRO_X_VAL];
+        avgGyroY=samplesAvg[GYRO_Y_VAL];
+        avgGyroZ=samplesAvg[GYRO_Z_VAL];
+
 
         for (int i=0; i < numSamples;i++){
             varianceSumTemp += (tempVals[i]-avgTemp)*(tempVals[i]-avgTemp);
             varianceSumPressure += (pressureVals[i]-avgPressure)*(pressureVals[i]-avgPressure);
             varianceSumMagnetoX += (magnetoXVals[i]-avgMagnetoX)*(magnetoXVals[i]-avgMagnetoX);
+            varianceSumMagnetoY += (magnetoYVals[i]-avgMagnetoY)*(magnetoYVals[i]-avgMagnetoY);
+            varianceSumMagnetoZ += (magnetoZVals[i]-avgMagnetoZ)*(magnetoZVals[i]-avgMagnetoZ);
             varianceSumGyroX += (gyroXVals[i]-avgGyroX)*(gyroXVals[i]-avgGyroX);
+            varianceSumGyroY += (gyroYVals[i]-avgGyroY)*(gyroYVals[i]-avgGyroY);
+            varianceSumGyroZ += (gyroZVals[i]-avgGyroZ)*(gyroZVals[i]-avgGyroZ);
         }
-        samplesVariance[TEMP] = varianceSumTemp/(numSamples-1);
-        samplesVariance[PRESSURE] = varianceSumPressure/(numSamples-1);
-        samplesVariance[MAGNETOMETER] = varianceSumMagnetoX/(numSamples-1);
-        samplesVariance[GYRO] = varianceSumGyroX/(numSamples-1);
+        samplesVariance[TEMP_VAL] = varianceSumTemp/(numSamples-1);
+        samplesVariance[PRESSURE_VAL] = varianceSumPressure/(numSamples-1);
+        samplesVariance[MAG_X_VAL] = varianceSumMagnetoX/(numSamples-1);
+        samplesVariance[MAG_Y_VAL] = varianceSumMagnetoY/(numSamples-1);
+        samplesVariance[MAG_Z_VAL] = varianceSumMagnetoZ/(numSamples-1);
+        samplesVariance[GYRO_X_VAL] = varianceSumGyroX/(numSamples-1);
+        samplesVariance[GYRO_Y_VAL] = varianceSumGyroY/(numSamples-1);
+        samplesVariance[GYRO_Z_VAL] = varianceSumGyroZ/(numSamples-1);
+
     }
 
 }
@@ -673,7 +745,7 @@ void OsTask_readSensors(void const * argument)
   {
   temperature = BSP_TSENSOR_ReadTemp();
   pressure = BSP_PSENSOR_ReadPressure();
-  BSP_MAGNETO_GetXYZ(magneto);
+  BSP_MAGNETO_GetXYZ((int16_t*)magneto);
   BSP_GYRO_GetXYZ(gyro);
   writeSensorsToFlash();
   readSampleFlash();
@@ -722,10 +794,22 @@ void OsTask_sendToUART(void const * argument)
 	if (currentSensor == STATISTICS) {
 		readSampleFlash();
 		computeStats();
-		snprintf(message, 200, "Current statistics over %d samples: \r\n \t\t Temp \t\t Pressure \t\t  MagnetoX \t\t GyroX  \r\n\r\n Average \t %f \t %f \t\t %f \t\t %f\r\n", numSamples, samplesAvg[TEMP], samplesAvg[PRESSURE], samplesAvg[MAGNETOMETER], samplesAvg[GYRO]);
+		snprintf(message, 200, "Current statistics over %d samples: \r\n \t\t AvgTemp: %f \t\t AvgPressure: %f \t\t\r\n", numSamples, samplesAvg[TEMP_VAL], samplesAvg[PRESSURE_VAL]);
 		HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
 		memset(message, 0, sizeof(message));
-		snprintf(message, 200, "\r\n\r\n Variance \t %f \t %f \t\t %f \t\t %f\r\n",samplesVariance[TEMP], samplesVariance[PRESSURE], samplesVariance[MAGNETOMETER], samplesVariance[GYRO]);
+		snprintf(message, 200, "\r\n \t\t VarTemp: %f \t\t VarPressure: %f \t\t\r\n", samplesVariance[TEMP_VAL], samplesVariance[PRESSURE_VAL]);
+		HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
+		memset(message, 0, sizeof(message));
+		snprintf(message, 200, "\r\n \t\t AvgMagnetoX: %f \t\t AvgMagnetoY: %f \t\t AvgMagnetoZ: %f \t\t\r\n", samplesAvg[MAG_X_VAL], samplesAvg[MAG_Y_VAL], samplesAvg[MAG_Z_VAL]);
+		HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
+		memset(message, 0, sizeof(message));
+		snprintf(message, 200, "\r\n \t\t VarMagnetoX: %f \t\t VarMagnetoY: %f \t\t VarMagnetoZ: %f \t\t\r\n", samplesVariance[MAG_X_VAL], samplesVariance[MAG_Y_VAL], samplesVariance[MAG_Z_VAL]);
+		HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
+		memset(message, 0, sizeof(message));
+		snprintf(message, 200, "\r\n \t\t AvgGyroX: %f \t\t AvgGyroY: %f \t\t AvgGyroZ: %f \t\t\r\n", samplesAvg[GYRO_X_VAL], samplesAvg[GYRO_Y_VAL], samplesAvg[GYRO_Z_VAL]);
+		HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
+		memset(message, 0, sizeof(message));
+		snprintf(message, 200, "\r\n \t\t VarGyroX: %f \t\t VarGyroY: %f \t\t VarGyroZ: %f \t\t\r\n", samplesVariance[GYRO_X_VAL], samplesVariance[GYRO_Y_VAL], samplesVariance[GYRO_Z_VAL]);
 		HAL_UART_Transmit(&huart1, (uint8_t *) message, sizeof(message), 1000);
 		memset(message, 0, sizeof(message));
 		while (currentSensor == STATISTICS) {
@@ -744,7 +828,7 @@ void OsTask_sendToUART(void const * argument)
 			snprintf(message, 200, "Pressure: %f\r\n", pressure);
 		    break;
 		case MAGNETOMETER:
-			snprintf(message, 200, "MagnetoX: %f, MagnetoY: %f, MagnetoZ: %f\r\n", magneto[0], magneto[1], magneto[2]);
+			snprintf(message, 200, "MagnetoX: %d, MagnetoY: %d, MagnetoZ: %d\r\n", magneto[0], magneto[1], magneto[2]);
 			break;
 		case GYRO:
 			snprintf(message, 200, "GyroX: %f, GyroY: %f, GyroZ: %f\r\n", gyro[0], gyro[1], gyro[2]);
